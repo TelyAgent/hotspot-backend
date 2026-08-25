@@ -9,5 +9,5 @@ export function parseTake(value: unknown, fallback = 50): number {
     return fallback;
   }
 
-  return Math.min(parsed, 100);
+  return Math.min(parsed, 500);
 }

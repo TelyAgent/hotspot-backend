@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { JsonObject } from '../common/types/json.type';
+import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from './decision/topic-watch-agent.service';
 import { TopicWatchRepository } from './topic-watch.repository';
 
@@ -8,6 +9,7 @@ export class TopicWatchController {
   constructor(
     private readonly topicWatchRepository: TopicWatchRepository,
     private readonly topicWatchAgentService: TopicWatchAgentService,
+    private readonly topicWatchCollectionService: TopicWatchCollectionService,
   ) {}
 
   @Get()
@@ -33,9 +35,73 @@ export class TopicWatchController {
     });
   }
 
+  @Post('collect')
+  collect() {
+    return this.topicWatchCollectionService.collect({});
+  }
+
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.topicWatchRepository.findTopicWatchById(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.topicWatchRepository.updateTopicWatch(id, {
+      ...(typeof body.name === 'string' ? { name: body.name } : {}),
+      ...(typeof body.description === 'string'
+        ? { description: body.description }
+        : {}),
+      ...(Array.isArray(body.domains)
+        ? { domains: body.domains.map(String) }
+        : {}),
+      ...(typeof body.watchIntent === 'string'
+        ? { watchIntent: body.watchIntent }
+        : {}),
+      ...(typeof body.collectionPolicy === 'string'
+        ? { collectionPolicy: body.collectionPolicy }
+        : {}),
+      ...(typeof body.triggerPolicy === 'string'
+        ? { triggerPolicy: body.triggerPolicy }
+        : {}),
+      ...(typeof body.evidencePolicy === 'string'
+        ? { evidencePolicy: body.evidencePolicy }
+        : {}),
+      ...(typeof body.exclusionPolicy === 'string' || body.exclusionPolicy === null
+        ? { exclusionPolicy: body.exclusionPolicy }
+        : {}),
+      ...(typeof body.status === 'string' ? { status: body.status } : {}),
+    });
+  }
+
+  @Post(':id/collect')
+  collectOne(@Param('id') id: string) {
+    return this.topicWatchCollectionService.collect({
+      topicWatchId: id,
+    });
+  }
+
+  @Patch(':id/monitoring-plans/active')
+  updateActiveMonitoringPlan(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.topicWatchRepository.updateActiveMonitoringPlan(id, {
+      ...(Array.isArray(body.sources)
+        ? { sources: body.sources as JsonObject[] }
+        : {}),
+      ...(Array.isArray(body.triggerRules)
+        ? { triggerRules: body.triggerRules as JsonObject[] }
+        : {}),
+      ...(Array.isArray(body.evidenceRequirements)
+        ? { evidenceRequirements: body.evidenceRequirements as JsonObject[] }
+        : {}),
+      ...(typeof body.refreshPolicy === 'object' && body.refreshPolicy !== null
+        ? { refreshPolicy: body.refreshPolicy as JsonObject }
+        : {}),
+      ...(typeof body.reason === 'string' ? { reason: body.reason } : {}),
+      ...(typeof body.status === 'string' ? { status: body.status } : {}),
+    });
   }
 
   @Get(':id/candidates')

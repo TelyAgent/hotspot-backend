@@ -75,7 +75,7 @@ export class TopicAggregationService {
       firstSeenAt: sortedSignals[0].observedAt,
       lastSeenAt: sortedSignals[sortedSignals.length - 1].observedAt,
       signalCount: signals.length,
-      postCount: signals.filter((signal) => signal.signalType === 'post').length,
+      postCount: signals.filter((signal) => isPostSignal(signal.signalType)).length,
       accountCount: authors.length || null,
       sourceTypes,
       representativeSignalIds: sortedSignals.slice(0, 5).map((signal) => signal.id),
@@ -120,4 +120,8 @@ export class TopicAggregationService {
     const titles = [...new Set(signals.map((signal) => signal.title))];
     return titles.slice(0, 3).join(' / ');
   }
+}
+
+function isPostSignal(signalType: string) {
+  return signalType === 'post' || signalType.endsWith('_post');
 }

@@ -19,8 +19,11 @@ export class SignalRepository {
     }) as Promise<Signal | null>;
   }
 
-  async findMany(input: { take?: number } = {}): Promise<Signal[]> {
+  async findMany(input: { take?: number; signalType?: string } = {}): Promise<Signal[]> {
     return this.prisma.signal.findMany({
+      where: {
+        ...(input.signalType ? { signalType: input.signalType } : {}),
+      },
       take: input.take ?? 50,
       orderBy: {
         observedAt: 'desc',

@@ -31,7 +31,7 @@ export class OpenAiModelProvider implements ModelProvider {
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('OPENAI_API_KEY');
     this.model =
-      this.configService.get<string>('OPENAI_MODEL') ?? 'gpt-5';
+      this.configService.get<string>('OPENAI_MODEL') ?? 'gpt-4o-mini';
     this.baseUrl =
       this.configService.get<string>('OPENAI_BASE_URL') ??
       'https://api.openai.com/v1';

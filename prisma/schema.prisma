@@ -43,9 +43,35 @@ model Signal {
 
   rawItem       RawItem        @relation(fields: [rawItemId], references: [id], onDelete: Cascade)
   evidenceItems EvidenceItem[]
+  youtubeVideoAnalyses YoutubeVideoAnalysis[]
 
   @@index([source, signalType, observedAt])
   @@map("signals")
+}
+
+model YoutubeVideoAnalysis {
+  id                 String   @id @default(cuid())
+  signalId           String
+  videoId            String
+  status             String
+  transcriptStatus   String?
+  transcriptProvider String?
+  transcriptLanguage String?
+  transcriptText     String?
+  transcriptSegments Json?
+  result             Json?
+  errorMessage       String?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  signal Signal @relation(fields: [signalId], references: [id], onDelete: Cascade)
+
+  @@unique([signalId])
+  @@index([status, createdAt])
+  @@index([videoId])
+  @@map("youtube_video_analyses")
 }
 
 model EvidenceItem {

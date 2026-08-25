@@ -58,7 +58,7 @@ function createSignal(input: {
     rawItemId: `raw_${input.id}`,
     source: 'x',
     platform: 'x',
-    signalType: 'post',
+    signalType: 'x_post',
     title: input.title,
     summary: input.title,
     observedAt: new Date('2026-08-24T10:10:00.000Z'),

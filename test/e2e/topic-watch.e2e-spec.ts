@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
+import { TopicWatchCollectionService } from '../../src/topic-watch/collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from '../../src/topic-watch/decision/topic-watch-agent.service';
 import { TopicWatchController } from '../../src/topic-watch/topic-watch.controller';
 import { TopicWatchRepository } from '../../src/topic-watch/topic-watch.repository';
@@ -8,6 +9,7 @@ import { TopicWatchRepository } from '../../src/topic-watch/topic-watch.reposito
 describe('TopicWatch API', () => {
   let app: INestApplication;
   let repository: jest.Mocked<Partial<TopicWatchRepository>>;
+  let collectionService: jest.Mocked<Partial<TopicWatchCollectionService>>;
 
   beforeEach(async () => {
     repository = {
@@ -40,6 +42,19 @@ describe('TopicWatch API', () => {
         } as never),
       ),
     };
+    collectionService = {
+      collect: jest.fn(() =>
+        Promise.resolve({
+          topicWatchCount: 1,
+          sourceCount: 1,
+          rawItemCount: 3,
+          signalCount: 3,
+          evidenceCount: 3,
+          candidateCount: 1,
+          runs: [],
+        }),
+      ),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [TopicWatchController],
@@ -58,6 +73,10 @@ describe('TopicWatch API', () => {
               }),
             ),
           },
+        },
+        {
+          provide: TopicWatchCollectionService,
+          useValue: collectionService,
         },
       ],
     }).compile();
@@ -118,5 +137,29 @@ describe('TopicWatch API', () => {
         version: 1,
       }),
     );
+  });
+
+  it('collects all active topic watches', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/topic-watches/collect')
+      .expect(201);
+
+    expect(collectionService.collect).toHaveBeenCalledWith({});
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        topicWatchCount: 1,
+        rawItemCount: 3,
+      }),
+    );
+  });
+
+  it('collects one topic watch', async () => {
+    await request(app.getHttpServer())
+      .post('/topic-watches/tw_1/collect')
+      .expect(201);
+
+    expect(collectionService.collect).toHaveBeenCalledWith({
+      topicWatchId: 'tw_1',
+    });
   });
 });

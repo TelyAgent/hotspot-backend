@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JsonObject } from '../common/types/json.type';
 import { PrismaService } from '../database/prisma.service';
+import { Signal } from '../signal/signal/signal.types';
 import {
   CreateTopicCandidateInput,
   CreateTopicWatchDecisionInput,
@@ -9,7 +10,29 @@ import {
   TopicCandidate,
   TopicWatch,
   TopicWatchDecision,
+  TopicMonitoringPlan,
 } from './topic-watch.types';
+
+export interface UpdateTopicWatchInput {
+  name?: string;
+  description?: string;
+  domains?: string[];
+  watchIntent?: string;
+  collectionPolicy?: string;
+  triggerPolicy?: string;
+  evidencePolicy?: string;
+  exclusionPolicy?: string | null;
+  status?: string;
+}
+
+export interface UpdateMonitoringPlanInput {
+  sources?: JsonObject[];
+  triggerRules?: JsonObject[];
+  evidenceRequirements?: JsonObject[];
+  refreshPolicy?: JsonObject;
+  reason?: string;
+  status?: string;
+}
 
 @Injectable()
 export class TopicWatchRepository {
@@ -38,12 +61,177 @@ export class TopicWatchRepository {
     }) as unknown as Promise<TopicWatch | null>;
   }
 
+  async updateTopicWatch(
+    id: string,
+    input: UpdateTopicWatchInput,
+  ): Promise<TopicWatch> {
+    return this.prisma.topicWatch.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
+        ...(input.domains !== undefined ? { domains: input.domains } : {}),
+        ...(input.watchIntent !== undefined
+          ? { watchIntent: input.watchIntent }
+          : {}),
+        ...(input.collectionPolicy !== undefined
+          ? { collectionPolicy: input.collectionPolicy }
+          : {}),
+        ...(input.triggerPolicy !== undefined
+          ? { triggerPolicy: input.triggerPolicy }
+          : {}),
+        ...(input.evidencePolicy !== undefined
+          ? { evidencePolicy: input.evidencePolicy }
+          : {}),
+        ...(input.exclusionPolicy !== undefined
+          ? { exclusionPolicy: input.exclusionPolicy }
+          : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+      },
+    }) as unknown as Promise<TopicWatch>;
+  }
+
   async listTopicWatches(): Promise<TopicWatch[]> {
     return this.prisma.topicWatch.findMany({
+      include: {
+        monitoringPlans: {
+          where: {
+            status: 'active',
+          },
+          orderBy: {
+            version: 'desc',
+          },
+          take: 1,
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },
     }) as unknown as Promise<TopicWatch[]>;
+  }
+
+  async listActiveTopicWatches(): Promise<TopicWatch[]> {
+    return this.prisma.topicWatch.findMany({
+      where: {
+        status: 'active',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    }) as unknown as Promise<TopicWatch[]>;
+  }
+
+  async findActiveMonitoringPlan(
+    topicWatchId: string,
+  ): Promise<TopicMonitoringPlan | null> {
+    return this.prisma.topicMonitoringPlan.findFirst({
+      where: {
+        topicWatchId,
+        status: 'active',
+      },
+      orderBy: {
+        version: 'desc',
+      },
+    }) as unknown as Promise<TopicMonitoringPlan | null>;
+  }
+
+  async getMinimumActiveRefreshIntervalMinutes(): Promise<number | null> {
+    const plans = await this.prisma.topicMonitoringPlan.findMany({
+      where: {
+        status: 'active',
+        topicWatch: {
+          status: 'active',
+        },
+      },
+      select: {
+        refreshPolicy: true,
+      },
+    });
+    const intervals = plans
+      .map((plan) => {
+        if (
+          plan.refreshPolicy &&
+          typeof plan.refreshPolicy === 'object' &&
+          !Array.isArray(plan.refreshPolicy)
+        ) {
+          const value = (plan.refreshPolicy as Record<string, unknown>).intervalMinutes;
+          return typeof value === 'number' && Number.isFinite(value)
+            ? value
+            : undefined;
+        }
+        return undefined;
+      })
+      .filter((value): value is number => typeof value === 'number');
+
+    if (intervals.length === 0) return null;
+    return Math.min(...intervals);
+  }
+
+  async listSignalsForTopicWatch(input: {
+    topicWatchId: string;
+    windowStartAt: Date;
+    windowEndAt: Date;
+  }): Promise<Signal[]> {
+    return this.prisma.signal.findMany({
+      where: {
+        platform: 'x',
+        signalType: 'x_post',
+        observedAt: {
+          gte: input.windowStartAt,
+          lte: input.windowEndAt,
+        },
+        metadata: {
+          path: ['topicWatchId'],
+          equals: input.topicWatchId,
+        },
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+      take: 200,
+    }) as unknown as Promise<Signal[]>;
+  }
+
+  async updateActiveMonitoringPlan(
+    topicWatchId: string,
+    input: UpdateMonitoringPlanInput,
+  ): Promise<TopicMonitoringPlan> {
+    const activePlan = await this.prisma.topicMonitoringPlan.findFirstOrThrow({
+      where: {
+        topicWatchId,
+        status: 'active',
+      },
+      orderBy: {
+        version: 'desc',
+      },
+    });
+
+    return this.prisma.topicMonitoringPlan.update({
+      where: {
+        id: activePlan.id,
+      },
+      data: {
+        ...(input.sources !== undefined
+          ? { sources: input.sources as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(input.triggerRules !== undefined
+          ? { triggerRules: input.triggerRules as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(input.evidenceRequirements !== undefined
+          ? {
+              evidenceRequirements:
+                input.evidenceRequirements as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
+        ...(input.refreshPolicy !== undefined
+          ? { refreshPolicy: input.refreshPolicy as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(input.reason !== undefined ? { reason: input.reason } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+      },
+    }) as unknown as Promise<TopicMonitoringPlan>;
   }
 
   async listCandidates(topicWatchId: string): Promise<TopicCandidate[]> {

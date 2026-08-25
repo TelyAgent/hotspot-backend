@@ -94,6 +94,35 @@ describe('OpenAiModelProvider', () => {
     });
   });
 
+  it('uses gpt-4o-mini by default when model is not configured', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            type: 'final_decision',
+            decision: {
+              decision: 'skip',
+            },
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await provider.completeStructured(createInput());
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/responses',
+      expect.objectContaining({
+        body: expect.stringContaining('"model":"gpt-4o-mini"'),
+      }),
+    );
+  });
+
   it('throws a domain error when the API fails', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve(

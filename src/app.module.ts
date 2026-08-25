@@ -13,6 +13,7 @@ import { PerformanceModule } from './performance/performance.module';
 import { ProjectConfigModule } from './project-config/project-config.module';
 import { SignalModule } from './signal/signal.module';
 import { TopicWatchModule } from './topic-watch/topic-watch.module';
+import { YoutubeModule } from './youtube/youtube.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { TopicWatchModule } from './topic-watch/topic-watch.module';
     AssignmentModule,
     ContentModule,
     PerformanceModule,
+    YoutubeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

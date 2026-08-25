@@ -11,9 +11,10 @@ export class SignalController {
   ) {}
 
   @Get()
-  list(@Query('take') take?: string) {
+  list(@Query('take') take?: string, @Query('signalType') signalType?: string) {
     return this.signalRepository.findMany({
       take: parseTake(take),
+      signalType,
     });
   }
 
