@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { FutureEventsPlugin } from '../plugins/future-events/future-events.plugin';
 import { MockDataSourcePlugin } from '../plugins/mock/mock.plugin';
 import { XAccountPostsPlugin } from '../plugins/x-account-posts/x-account-posts.plugin';
 import { XTrendsPlugin } from '../plugins/x-trends/x-trends.plugin';
@@ -10,6 +11,7 @@ export class DataSourcePluginRegistrationService implements OnModuleInit {
   constructor(
     private readonly registry: DataSourcePluginRegistry,
     private readonly mockPlugin: MockDataSourcePlugin,
+    private readonly futureEventsPlugin: FutureEventsPlugin,
     private readonly xAccountPostsPlugin: XAccountPostsPlugin,
     private readonly xTrendsPlugin: XTrendsPlugin,
     private readonly youtubeVideosPlugin: YoutubeVideosPlugin,
@@ -18,6 +20,7 @@ export class DataSourcePluginRegistrationService implements OnModuleInit {
   onModuleInit(): void {
     for (const plugin of [
       this.mockPlugin,
+      this.futureEventsPlugin,
       this.xAccountPostsPlugin,
       this.xTrendsPlugin,
       this.youtubeVideosPlugin,

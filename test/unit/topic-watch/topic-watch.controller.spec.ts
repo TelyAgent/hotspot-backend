@@ -73,6 +73,93 @@ describe('TopicWatchController', () => {
     );
   });
 
+  it('lists monitoring plans', async () => {
+    const repository = {
+      listMonitoringPlans: jest.fn((topicWatchId) =>
+        Promise.resolve([
+          {
+            id: 'plan_1',
+            topicWatchId,
+            version: 1,
+            status: 'active',
+          },
+        ]),
+      ),
+    } as unknown as TopicWatchRepository;
+    const controller = new TopicWatchController(
+      repository,
+      {} as TopicWatchAgentService,
+      {} as TopicWatchCollectionService,
+    );
+
+    const result = await controller.listMonitoringPlans('topic_ai');
+
+    expect(repository.listMonitoringPlans).toHaveBeenCalledWith('topic_ai');
+    expect(result).toHaveLength(1);
+  });
+
+  it('generates monitoring plan through agent', async () => {
+    const repository = {
+      findTopicWatchById: jest.fn(() =>
+        Promise.resolve({
+          id: 'topic_ai',
+          name: 'AI 与科技',
+          status: 'active',
+        }),
+      ),
+    } as unknown as TopicWatchRepository;
+    const agentService = {
+      generateMonitoringPlan: jest.fn((input) =>
+        Promise.resolve({
+          id: 'plan_1',
+          topicWatchId: input.topicWatch.id,
+          status: input.activate ? 'active' : 'draft',
+        }),
+      ),
+    } as unknown as TopicWatchAgentService;
+    const controller = new TopicWatchController(
+      repository,
+      agentService,
+      {} as TopicWatchCollectionService,
+    );
+
+    const result = await controller.generateMonitoringPlan('topic_ai', {
+      activate: true,
+    });
+
+    expect(agentService.generateMonitoringPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicWatch: expect.objectContaining({ id: 'topic_ai' }),
+        activate: true,
+      }),
+    );
+    expect(result?.status).toBe('active');
+  });
+
+  it('activates monitoring plan', async () => {
+    const repository = {
+      activateMonitoringPlan: jest.fn((topicWatchId, planId) =>
+        Promise.resolve({
+          id: planId,
+          topicWatchId,
+          status: 'active',
+        }),
+      ),
+    } as unknown as TopicWatchRepository;
+    const controller = new TopicWatchController(
+      repository,
+      {} as TopicWatchAgentService,
+      {} as TopicWatchCollectionService,
+    );
+
+    await controller.activateMonitoringPlan('topic_ai', 'plan_1');
+
+    expect(repository.activateMonitoringPlan).toHaveBeenCalledWith(
+      'topic_ai',
+      'plan_1',
+    );
+  });
+
   it('starts collection for all active topic watches', async () => {
     const collectionService = {
       collect: jest.fn(() =>

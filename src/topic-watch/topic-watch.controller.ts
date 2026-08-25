@@ -104,6 +104,32 @@ export class TopicWatchController {
     });
   }
 
+  @Get(':id/monitoring-plans')
+  listMonitoringPlans(@Param('id') id: string) {
+    return this.topicWatchRepository.listMonitoringPlans(id);
+  }
+
+  @Post(':id/monitoring-plans/generate')
+  async generateMonitoringPlan(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const topicWatch = await this.topicWatchRepository.findTopicWatchById(id);
+    if (!topicWatch) {
+      return null;
+    }
+
+    return this.topicWatchAgentService.generateMonitoringPlan({
+      topicWatch,
+      activate: body.activate === true,
+    });
+  }
+
+  @Post(':id/monitoring-plans/:planId/activate')
+  activateMonitoringPlan(@Param('id') id: string, @Param('planId') planId: string) {
+    return this.topicWatchRepository.activateMonitoringPlan(id, planId);
+  }
+
   @Get(':id/candidates')
   listCandidates(@Param('id') id: string) {
     return this.topicWatchRepository.listCandidates(id);
@@ -130,7 +156,7 @@ export class TopicWatchController {
   }
 
   @Post(':id/monitoring-plans')
-  listMonitoringPlans(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+  createMonitoringPlan(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.topicWatchRepository.createMonitoringPlan({
       topicWatchId: id,
       version: Number(body.version ?? 1),

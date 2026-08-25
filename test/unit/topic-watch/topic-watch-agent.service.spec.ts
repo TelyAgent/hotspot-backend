@@ -58,6 +58,139 @@ describe('TopicWatchAgentService', () => {
     );
     expect(result.decision).toBe('create_opportunity');
   });
+
+  it('generates a draft monitoring plan from topic watch policies', async () => {
+    const workflowEngine = {
+      run: jest.fn(() =>
+        Promise.resolve({
+          runId: 'run_plan_1',
+          status: 'succeeded',
+          result: {
+            sources: [
+              {
+                platform: 'x',
+                sourceType: 'account',
+                handle: 'OpenAI',
+                includeReplies: true,
+                includeQuotes: true,
+                includeReposts: false,
+                maxPages: 5,
+              },
+            ],
+            triggerRules: [
+              {
+                ruleId: 'multi-account-discussion',
+                description: '多账号集中讨论时触发。',
+                conditionText: '多个核心账号在短时间讨论同一事件。',
+              },
+            ],
+            evidenceRequirements: [
+              {
+                sourceType: 'x_account_post',
+                requiredFields: ['url', 'text', 'publishedAt', 'metrics'],
+              },
+            ],
+            refreshPolicy: {
+              intervalMinutes: 180,
+              lookbackMinutes: 180,
+            },
+            reason: '根据主题策略生成 X 账号监控计划。',
+          },
+        }),
+      ),
+    } as unknown as AgentWorkflowEngine;
+    const repository = {
+      findLatestMonitoringPlan: jest.fn(() =>
+        Promise.resolve({
+          id: 'plan_old',
+          version: 1,
+          status: 'active',
+        }),
+      ),
+      createMonitoringPlan: jest.fn((input) =>
+        Promise.resolve({
+          id: 'plan_2',
+          createdAt: new Date('2026-08-24T10:00:00.000Z'),
+          updatedAt: new Date('2026-08-24T10:00:00.000Z'),
+          ...input,
+        }),
+      ),
+    } as unknown as TopicWatchRepository;
+    const service = new TopicWatchAgentService(workflowEngine, repository);
+
+    const result = await service.generateMonitoringPlan({
+      topicWatch: createTopicWatch(),
+    });
+
+    expect(workflowEngine.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'topic_watch_monitoring_plan',
+        maxSteps: 5,
+        goal: expect.objectContaining({
+          nextVersion: 2,
+        }),
+      }),
+    );
+    expect(repository.createMonitoringPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicWatchId: 'tw_1',
+        version: 2,
+        generatedBy: 'agent',
+        status: 'draft',
+      }),
+    );
+    expect(result.id).toBe('plan_2');
+  });
+
+  it('activates generated monitoring plan when requested', async () => {
+    const workflowEngine = {
+      run: jest.fn(() =>
+        Promise.resolve({
+          runId: 'run_plan_1',
+          status: 'succeeded',
+          result: {
+            sources: [],
+            triggerRules: [],
+            evidenceRequirements: [],
+            refreshPolicy: {
+              intervalMinutes: 180,
+              lookbackMinutes: 180,
+            },
+            reason: '先生成空计划等待人工补充账号。',
+          },
+        }),
+      ),
+    } as unknown as AgentWorkflowEngine;
+    const repository = {
+      findLatestMonitoringPlan: jest.fn(() => Promise.resolve(null)),
+      createMonitoringPlan: jest.fn((input) =>
+        Promise.resolve({
+          id: 'plan_1',
+          ...input,
+        }),
+      ),
+      activateMonitoringPlan: jest.fn((topicWatchId, planId) =>
+        Promise.resolve({
+          id: planId,
+          topicWatchId,
+          version: 1,
+          status: 'active',
+        }),
+      ),
+    } as unknown as TopicWatchRepository;
+    const service = new TopicWatchAgentService(workflowEngine, repository);
+
+    const result = await service.generateMonitoringPlan({
+      topicWatch: createTopicWatch(),
+      activate: true,
+    });
+
+    expect(repository.activateMonitoringPlan).toHaveBeenCalledWith(
+      'tw_1',
+      'plan_1',
+    );
+    expect(result.status).toBe('active');
+  });
 });
 
 function createTopicWatch(): TopicWatch {

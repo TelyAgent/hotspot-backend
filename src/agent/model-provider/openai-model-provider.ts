@@ -153,6 +153,34 @@ export class OpenAiModelProvider implements ModelProvider {
         '最终输出必须严格为：',
         '{"type":"final_decision","decision":{"body":"中文内容正文","evidenceRefs":["证据ID"],"riskNotes":["风险说明"]}}',
       ].join('\n'),
+      future_event_discovery: [
+        '当前 agentType=future_event_discovery。',
+        '你要从 goal.signals 中发现值得运营提前关注的未来事件候选。',
+        '不要直接创建正式 FutureEvent，只输出候选 candidates。',
+        '最终输出必须严格为：',
+        '{"type":"final_decision","decision":{"candidates":[{"title":"中文标题","eventType":"conference|economic_data|election|product_launch|earnings|sports|entertainment|industry_event|prediction_market|other","scheduledAt":"ISO时间，可省略","timeRange":{"startAt":"ISO时间","endAt":"ISO时间"},"domains":["领域"],"summary":"中文摘要","whyItMatters":"为什么值得运营关注","recommendedMonitoringStartAt":"ISO时间，可省略","recommendedMonitoringEndAt":"ISO时间，可省略","suggestedKeywords":["关键词"],"suggestedAccounts":["账号"],"suggestedPlatforms":["平台"],"evidenceRefs":["Signal ID"],"confidence":"high|medium|low","missingData":["缺失数据"],"riskNotes":["风险说明"]}]}}',
+      ].join('\n'),
+      future_event_source_discovery: [
+        '当前 agentType=future_event_source_discovery。',
+        '你要把 goal.strategyMarkdown 中运营人员写的未来事件来源策略，转换成可审计、可执行的来源采集计划。',
+        '只能选择 goal.availablePlugins 中存在的 pluginId 和 capabilityId。',
+        '如果 Markdown 提到的来源没有可用插件，不要编造插件，必须放入 missingSources。',
+        'sources.params 必须符合对应插件能力的输入语义；官方未来事件来源应优先使用 future-events / future.events.discover。',
+        'future-events 插件必须使用 params.sources，并在每个 source 里写明 sourceType 和 variables.url；不要只输出 sourceTypes。',
+        'refreshPolicy 需要保守，官方来源默认每天采集即可。',
+        '最终输出必须严格为：',
+        '{"type":"final_decision","decision":{"sources":[{"id":"official_macro","pluginId":"future-events","capabilityId":"future.events.discover","params":{"sources":[{"sourceType":"bea","variables":{"url":"https://www.bea.gov/news/schedule"}},{"sourceType":"bls","variables":{"url":"https://www.bls.gov/schedule/news_release/bls.ics","includeReleaseTypes":["Employment Situation","CPI","PPI","JOLTS","ECI"]}},{"sourceType":"fomc","variables":{"url":"https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}}]},"reason":"中文说明为什么选择这些来源"}],"missingSources":[{"name":"来源名称","reason":"为什么当前不能执行"}],"refreshPolicy":{"intervalMs":86400000},"reason":"中文说明整体来源计划"}}',
+      ].join('\n'),
+      topic_watch_monitoring_plan: [
+        '当前 agentType=topic_watch_monitoring_plan。',
+        '你要根据 goal.topicWatch 的自然语言监控意图、采集策略、触发策略、证据要求和排除规则，生成可审计、可执行的主题监控计划。',
+        '只允许使用系统已注册或常见预留的数据源类型，不要假设可以访问未注册平台。',
+        'MVP 阶段优先输出 x/account 账号源；如果缺少账号或关键词，应在 reason 中说明，并尽量给出保守的默认计划。',
+        'sources 中的 X 账号源格式为 {"platform":"x","sourceType":"account","handle":"账号handle","includeReplies":true,"includeQuotes":true,"includeReposts":false,"maxPages":5}。',
+        'refreshPolicy 至少包含 intervalMinutes 和 lookbackMinutes，频率必须保守。',
+        '最终输出必须严格为：',
+        '{"type":"final_decision","decision":{"sources":[{"platform":"x","sourceType":"account","handle":"OpenAI","includeReplies":true,"includeQuotes":true,"includeReposts":false,"maxPages":5}],"triggerRules":[{"ruleId":"规则ID","description":"中文规则描述","conditionText":"自然语言触发条件"}],"evidenceRequirements":[{"sourceType":"x_account_post","requiredFields":["url","text","publishedAt","metrics"],"description":"中文证据要求"}],"refreshPolicy":{"intervalMinutes":180,"lookbackMinutes":180},"reason":"中文说明为什么这样监控"}}',
+      ].join('\n'),
     };
 
     return contracts[agentType] ?? '';

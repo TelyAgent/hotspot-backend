@@ -137,6 +137,61 @@ export class TopicWatchRepository {
     }) as unknown as Promise<TopicMonitoringPlan | null>;
   }
 
+  async findLatestMonitoringPlan(
+    topicWatchId: string,
+  ): Promise<TopicMonitoringPlan | null> {
+    return this.prisma.topicMonitoringPlan.findFirst({
+      where: {
+        topicWatchId,
+      },
+      orderBy: {
+        version: 'desc',
+      },
+    }) as unknown as Promise<TopicMonitoringPlan | null>;
+  }
+
+  async listMonitoringPlans(
+    topicWatchId: string,
+  ): Promise<TopicMonitoringPlan[]> {
+    return this.prisma.topicMonitoringPlan.findMany({
+      where: {
+        topicWatchId,
+      },
+      orderBy: {
+        version: 'desc',
+      },
+    }) as unknown as Promise<TopicMonitoringPlan[]>;
+  }
+
+  async activateMonitoringPlan(
+    topicWatchId: string,
+    planId: string,
+  ): Promise<TopicMonitoringPlan> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.topicMonitoringPlan.updateMany({
+        where: {
+          topicWatchId,
+          status: 'active',
+          id: {
+            not: planId,
+          },
+        },
+        data: {
+          status: 'paused',
+        },
+      });
+
+      return tx.topicMonitoringPlan.update({
+        where: {
+          id: planId,
+        },
+        data: {
+          status: 'active',
+        },
+      });
+    }) as unknown as Promise<TopicMonitoringPlan>;
+  }
+
   async getMinimumActiveRefreshIntervalMinutes(): Promise<number | null> {
     const plans = await this.prisma.topicMonitoringPlan.findMany({
       where: {

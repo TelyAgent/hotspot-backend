@@ -237,6 +237,25 @@ model FutureEventCandidate {
   @@map("future_event_candidates")
 }
 
+model FutureEventSourcePlan {
+  id               String   @id @default(cuid())
+  version          Int
+  status           String
+  strategyMarkdown String
+  sources          Json
+  missingSources   Json?
+  refreshPolicy    Json
+  reason           String
+  generatedBy      String
+  agentRunId       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([version])
+  @@index([status, version])
+  @@map("future_event_source_plans")
+}
+
 model FutureEventMonitoringPlan {
   id                    String   @id @default(cuid())
   futureEventId          String
@@ -254,10 +273,34 @@ model FutureEventMonitoringPlan {
   updatedAt              DateTime @updatedAt
 
   futureEvent FutureEvent @relation(fields: [futureEventId], references: [id], onDelete: Cascade)
+  runs        FutureEventMonitoringRun[]
 
   @@index([futureEventId, status])
   @@index([monitoringStartAt, monitoringEndAt])
   @@map("future_event_monitoring_plans")
+}
+
+model FutureEventMonitoringRun {
+  id            String    @id @default(cuid())
+  futureEventId String
+  planId        String
+  phase         String
+  status        String
+  startedAt     DateTime
+  finishedAt    DateTime?
+  rawItemCount  Int       @default(0)
+  signalCount   Int       @default(0)
+  errorMessage  String?
+  input         Json?
+  outputSummary Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  plan FutureEventMonitoringPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([futureEventId, startedAt])
+  @@index([planId, phase, startedAt])
+  @@map("future_event_monitoring_runs")
 }
 
 model TopicWatch {

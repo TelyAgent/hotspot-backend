@@ -10,12 +10,7 @@ export class SignalService {
   async createFromRawItem(
     input: CreateSignalFromRawItemInput,
   ): Promise<Signal> {
-    return this.signalRepository.create({
-      rawItem: {
-        connect: {
-          id: input.rawItem.id,
-        },
-      },
+    const data = {
       source: input.rawItem.source,
       platform: input.platform ?? null,
       signalType: input.signalType,
@@ -25,6 +20,23 @@ export class SignalService {
       rawRefs: [input.rawItem.id] as Prisma.InputJsonValue,
       metrics: (input.metrics ?? Prisma.JsonNull) as Prisma.InputJsonValue,
       metadata: (input.metadata ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+    };
+    const existing = await this.signalRepository.findByRawItemAndType({
+      rawItemId: input.rawItem.id,
+      signalType: input.signalType,
+    });
+
+    if (existing) {
+      return this.signalRepository.update(existing.id, data);
+    }
+
+    return this.signalRepository.create({
+      rawItem: {
+        connect: {
+          id: input.rawItem.id,
+        },
+      },
+      ...data,
     });
   }
 }

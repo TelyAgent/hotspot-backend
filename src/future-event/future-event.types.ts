@@ -57,6 +57,68 @@ export interface FutureEventCandidate {
   updatedAt: Date;
 }
 
+export interface CreateFutureEventCandidateInput {
+  title: string;
+  eventType: string;
+  scheduledAt?: Date | null;
+  timeRange?: JsonObject | null;
+  domains: string[];
+  summary: string;
+  whyItMatters: string;
+  recommendedMonitoringStartAt?: Date | null;
+  recommendedMonitoringEndAt?: Date | null;
+  suggestedKeywords: string[];
+  suggestedAccounts: string[];
+  suggestedPlatforms: string[];
+  evidenceRefs: string[];
+  confidence: FutureEventConfidence;
+  status?: 'new' | 'confirmed' | 'ignored';
+  missingData?: string[];
+  riskNotes?: string[];
+}
+
+export type FutureEventSourcePlanStatus = 'draft' | 'active' | 'paused' | 'archived';
+
+export interface FutureEventSourcePlanSource {
+  id?: string;
+  pluginId: string;
+  capabilityId: string;
+  params: JsonObject;
+  reason: string;
+}
+
+export interface FutureEventSourcePlanMissingSource {
+  name: string;
+  reason: string;
+}
+
+export interface FutureEventSourcePlan {
+  id: string;
+  version: number;
+  status: FutureEventSourcePlanStatus;
+  strategyMarkdown: string;
+  sources: FutureEventSourcePlanSource[];
+  missingSources: FutureEventSourcePlanMissingSource[];
+  refreshPolicy: JsonObject;
+  reason: string;
+  generatedBy: 'agent' | 'human';
+  agentRunId?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateFutureEventSourcePlanInput {
+  version: number;
+  status?: FutureEventSourcePlanStatus;
+  strategyMarkdown: string;
+  sources: FutureEventSourcePlanSource[];
+  missingSources?: FutureEventSourcePlanMissingSource[];
+  refreshPolicy: JsonObject;
+  reason: string;
+  generatedBy: 'agent' | 'human';
+  agentRunId?: string | null;
+}
+
 export interface FutureEventMonitoringSource {
   sourceType: string;
   platform: string;
@@ -102,6 +164,23 @@ export interface FutureEventMonitoringPlan {
   missingData: string[];
   riskNotes: string[];
   status: FutureEventMonitoringPlanStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FutureEventMonitoringRun {
+  id: string;
+  futureEventId: string;
+  planId: string;
+  phase: string;
+  status: 'running' | 'succeeded' | 'failed' | 'skipped';
+  startedAt: Date;
+  finishedAt?: Date | null;
+  rawItemCount: number;
+  signalCount: number;
+  errorMessage?: string | null;
+  input?: JsonObject | null;
+  outputSummary?: JsonObject | null;
   createdAt: Date;
   updatedAt: Date;
 }
