@@ -1,0 +1,512 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RawItem {
+  id               String   @id @default(cuid())
+  source           String
+  sourceType       String
+  sourceItemId     String?
+  observedAt       DateTime
+  observedAtBucket DateTime
+  payload          Json
+  metadata         Json?
+  dedupeKey        String   @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  signals Signal[]
+
+  @@index([source, sourceType, observedAtBucket])
+  @@map("raw_items")
+}
+
+model Signal {
+  id         String   @id @default(cuid())
+  rawItemId  String
+  source     String
+  platform   String?
+  signalType String
+  title      String
+  summary    String?
+  observedAt DateTime
+  rawRefs    Json
+  metrics    Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  rawItem       RawItem        @relation(fields: [rawItemId], references: [id], onDelete: Cascade)
+  evidenceItems EvidenceItem[]
+
+  @@index([source, signalType, observedAt])
+  @@map("signals")
+}
+
+model EvidenceItem {
+  id           String   @id @default(cuid())
+  signalId     String?
+  sourceTool   String?
+  sourceType   String
+  sourceItemId String?
+  claim        String
+  text         String?
+  url          String?
+  author       String?
+  publishedAt  DateTime?
+  observedAt   DateTime
+  metrics      Json?
+  confidence   String
+  rawRef       String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  signal Signal? @relation(fields: [signalId], references: [id], onDelete: SetNull)
+
+  @@index([signalId])
+  @@index([sourceType, observedAt])
+  @@map("evidence_items")
+}
+
+model CollectionRun {
+  id            String    @id @default(cuid())
+  jobId         String
+  pluginId      String
+  capabilityId  String
+  status        String
+  startedAt     DateTime
+  finishedAt    DateTime?
+  rawItemCount  Int       @default(0)
+  errorMessage  String?
+  input         Json?
+  outputSummary Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([jobId, startedAt])
+  @@index([pluginId, capabilityId, startedAt])
+  @@map("collection_runs")
+}
+
+model ProjectConfig {
+  key         String   @id
+  value       Json
+  description String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("project_configs")
+}
+
+model AgentRun {
+  id          String    @id @default(cuid())
+  agentType   String
+  status      String
+  goal        Json
+  result      Json?
+  errorMessage String?
+  startedAt   DateTime
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  steps     AgentRunStep[]
+  toolCalls AgentToolCall[]
+
+  @@index([agentType, startedAt])
+  @@map("agent_runs")
+}
+
+model AgentRunStep {
+  id        String   @id @default(cuid())
+  runId     String
+  stepIndex Int
+  stepType  String
+  input     Json?
+  output    Json?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, stepIndex])
+  @@map("agent_run_steps")
+}
+
+model AgentToolCall {
+  id           String    @id @default(cuid())
+  runId        String?
+  toolName     String
+  status       String
+  input        Json
+  output       Json?
+  errorMessage String?
+  startedAt    DateTime
+  finishedAt   DateTime?
+  durationMs   Int?
+  createdAt    DateTime  @default(now())
+
+  run AgentRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([runId, startedAt])
+  @@index([toolName, startedAt])
+  @@map("agent_tool_calls")
+}
+
+model FutureEvent {
+  id          String    @id @default(cuid())
+  title       String
+  eventType   String
+  scheduledAt DateTime?
+  startAt     DateTime?
+  endAt       DateTime?
+  domains     Json
+  summary     String?
+  whyItMatters String?
+  status      String
+  createdFrom String
+  confidence  String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  monitoringPlans FutureEventMonitoringPlan[]
+
+  @@index([eventType, status])
+  @@index([scheduledAt])
+  @@map("future_events")
+}
+
+model FutureEventCandidate {
+  id                            String    @id @default(cuid())
+  title                         String
+  eventType                     String
+  scheduledAt                   DateTime?
+  timeRange                     Json?
+  domains                       Json
+  summary                       String
+  whyItMatters                  String
+  recommendedMonitoringStartAt  DateTime?
+  recommendedMonitoringEndAt    DateTime?
+  suggestedKeywords             Json
+  suggestedAccounts             Json
+  suggestedPlatforms            Json
+  evidenceRefs                  Json
+  confidence                    String
+  status                        String
+  missingData                   Json?
+  riskNotes                     Json?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  @@index([eventType, status])
+  @@index([scheduledAt])
+  @@map("future_event_candidates")
+}
+
+model FutureEventMonitoringPlan {
+  id                    String   @id @default(cuid())
+  futureEventId          String
+  monitoringStartAt      DateTime
+  monitoringEndAt        DateTime
+  phases                 Json
+  triggerRules           Json
+  expectedContentAngles  Json
+  evidenceRefs           Json
+  confidence             String
+  missingData            Json?
+  riskNotes              Json?
+  status                 String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  futureEvent FutureEvent @relation(fields: [futureEventId], references: [id], onDelete: Cascade)
+
+  @@index([futureEventId, status])
+  @@index([monitoringStartAt, monitoringEndAt])
+  @@map("future_event_monitoring_plans")
+}
+
+model TopicWatch {
+  id               String   @id @default(cuid())
+  name             String
+  description      String
+  domains          Json
+  watchIntent      String
+  collectionPolicy String
+  triggerPolicy    String
+  evidencePolicy   String
+  exclusionPolicy  String?
+  status           String
+  ownerId          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  monitoringPlans TopicMonitoringPlan[]
+  candidates      TopicCandidate[]
+  aggregationRuns TopicAggregationRun[]
+  decisions       TopicWatchDecision[]
+
+  @@index([status])
+  @@map("topic_watches")
+}
+
+model TopicMonitoringPlan {
+  id                    String   @id @default(cuid())
+  topicWatchId           String
+  version               Int
+  status                String
+  sources               Json
+  triggerRules          Json
+  evidenceRequirements  Json
+  refreshPolicy         Json
+  generatedBy           String
+  reason                String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  topicWatch TopicWatch @relation(fields: [topicWatchId], references: [id], onDelete: Cascade)
+
+  @@unique([topicWatchId, version])
+  @@map("topic_monitoring_plans")
+}
+
+model TopicCandidate {
+  id                      String   @id @default(cuid())
+  topicWatchId             String
+  title                   String
+  summary                 String
+  keywords                Json
+  entities                Json
+  firstSeenAt             DateTime
+  lastSeenAt              DateTime
+  signalCount             Int
+  postCount               Int?
+  accountCount            Int?
+  sourceTypes             Json
+  representativeSignalIds Json
+  evidenceRefs            Json
+  metrics                 Json
+  clustering              Json
+  status                  String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  topicWatch TopicWatch @relation(fields: [topicWatchId], references: [id], onDelete: Cascade)
+
+  @@index([topicWatchId, status])
+  @@index([firstSeenAt, lastSeenAt])
+  @@map("topic_candidates")
+}
+
+model TopicAggregationRun {
+  id               String    @id @default(cuid())
+  topicWatchId      String
+  monitoringRunId   String?
+  windowStartAt     DateTime
+  windowEndAt       DateTime
+  inputSignalCount  Int
+  candidateCount    Int
+  method            String
+  status            String
+  errorMessage      String?
+  createdAt         DateTime  @default(now())
+  finishedAt        DateTime?
+
+  topicWatch TopicWatch @relation(fields: [topicWatchId], references: [id], onDelete: Cascade)
+
+  @@index([topicWatchId, windowStartAt, windowEndAt])
+  @@map("topic_aggregation_runs")
+}
+
+model TopicWatchDecision {
+  id                   String   @id @default(cuid())
+  topicWatchId          String
+  decision             String
+  title                String?
+  summary              String
+  matchedRules         Json
+  evidenceRefs         Json
+  missingData          Json
+  riskNotes            Json
+  suggestedPlanChanges Json?
+  confidence           String
+  createdAt            DateTime @default(now())
+
+  topicWatch TopicWatch @relation(fields: [topicWatchId], references: [id], onDelete: Cascade)
+
+  @@index([topicWatchId, createdAt])
+  @@map("topic_watch_decisions")
+}
+
+model Opportunity {
+  id             String   @id @default(cuid())
+  title          String
+  type           String
+  summary        String
+  whyNow         String
+  whyItMatters   String
+  productAngles  Json
+  contentWindow  String?
+  evidenceRefs   Json
+  missingData    Json
+  riskNotes      Json
+  confidence     String
+  status         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([type, status])
+  @@index([createdAt])
+  @@map("opportunities")
+}
+
+model Event {
+  id            String   @id @default(cuid())
+  title         String
+  eventType     String
+  summary       String
+  occurredAt    DateTime?
+  evidenceRefs  Json
+  missingData   Json
+  riskNotes     Json
+  confidence    String
+  status        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([eventType, status])
+  @@index([occurredAt])
+  @@map("events")
+}
+
+model AssignmentRun {
+  id          String    @id @default(cuid())
+  targetType  String
+  targetId    String
+  status      String
+  goal        Json
+  decision    Json?
+  confidence  String?
+  riskNotes   Json?
+  missingData Json?
+  startedAt   DateTime
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items AssignmentItem[]
+
+  @@index([targetType, targetId])
+  @@map("assignment_runs")
+}
+
+model AssignmentItem {
+  id            String   @id @default(cuid())
+  runId         String
+  targetType    String
+  targetId      String
+  accountId     String
+  accountSource String
+  sourceSystem  String?
+  priority      String
+  contentType   String
+  contentGoal   String
+  angle         String
+  constraints   Json
+  reason        String
+  evidenceRefs  Json
+  duplicateRisk String
+  status        String
+  createdTaskId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  run AssignmentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@index([accountId, status])
+  @@map("assignment_items")
+}
+
+model ContentTask {
+  id          String   @id @default(cuid())
+  targetType  String
+  targetId    String
+  accountId   String
+  contentType String
+  contentGoal String
+  angle       String
+  constraints Json
+  evidenceRefs Json
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([targetType, targetId])
+  @@index([accountId, status])
+  @@map("content_tasks")
+}
+
+model ContentDraft {
+  id                   String   @id @default(cuid())
+  contentTaskId         String
+  version              Int
+  body                 String
+  evidenceRefs          Json
+  generationInput       Json
+  userInstruction       String?
+  status               String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([contentTaskId, version])
+  @@index([contentTaskId, status])
+  @@map("content_drafts")
+}
+
+model PublishedPost {
+  id            String    @id @default(cuid())
+  contentTaskId String
+  platform      String
+  url           String
+  publishedAt   DateTime
+  firstTrackedAt DateTime?
+  lastTrackedAt  DateTime?
+  trackingStatus String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  metricSnapshots PostMetricSnapshot[]
+
+  @@index([contentTaskId])
+  @@index([trackingStatus, publishedAt])
+  @@map("published_posts")
+}
+
+model PostMetricSnapshot {
+  id              String   @id @default(cuid())
+  publishedPostId  String
+  observedAt       DateTime
+  likes            Int?
+  replies          Int?
+  reposts          Int?
+  quotes           Int?
+  views            Int?
+  rawMetrics       Json?
+  isMissingData    Boolean  @default(false)
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  publishedPost PublishedPost @relation(fields: [publishedPostId], references: [id], onDelete: Cascade)
+
+  @@index([publishedPostId, observedAt])
+  @@map("post_metric_snapshots")
+}

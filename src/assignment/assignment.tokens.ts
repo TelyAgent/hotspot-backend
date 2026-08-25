@@ -1,0 +1,1 @@
+export const ACCOUNT_PROVIDER = Symbol('ACCOUNT_PROVIDER');
