@@ -65,6 +65,7 @@ export class TopicAggregationService {
     const keywords = this.collectMetadataStrings(signals, 'keywords');
     const sourceTypes = [...new Set(signals.map((signal) => signal.signalType))];
     const authors = this.collectMetadataStrings(signals, 'authorHandles');
+    const hotnessMetrics = this.calculateHotnessMetrics(sortedSignals);
 
     return {
       topicWatchId,
@@ -83,6 +84,7 @@ export class TopicAggregationService {
       metrics: {
         uniqueAuthors: authors.length,
         totalSignals: signals.length,
+        ...hotnessMetrics,
       },
       clustering: {
         method: 'hybrid',
@@ -120,8 +122,55 @@ export class TopicAggregationService {
     const titles = [...new Set(signals.map((signal) => signal.title))];
     return titles.slice(0, 3).join(' / ');
   }
+
+  private calculateHotnessMetrics(signals: Signal[]) {
+    const lastSeenAt = signals[signals.length - 1]?.observedAt ?? new Date();
+    const b3hWindowStart = lastSeenAt.getTime() - 3 * 60 * 60 * 1000;
+    const b24hWindowStart = lastSeenAt.getTime() - 24 * 60 * 60 * 1000;
+    const postSignals = signals.filter((signal) => isPostSignal(signal.signalType));
+    const scoredSignals = postSignals.map((signal) => ({
+      signal,
+      score: calculatePostTrafficScore(signal),
+    }));
+    const maxScore = scoredSignals.reduce(
+      (best, item) => (item.score > best.score ? item : best),
+      { signal: undefined as Signal | undefined, score: 0 },
+    );
+
+    return {
+      b3h: postSignals.filter(
+        (signal) => signal.observedAt.getTime() >= b3hWindowStart,
+      ).length,
+      b24h: postSignals.filter(
+        (signal) => signal.observedAt.getTime() >= b24hWindowStart,
+      ).length,
+      tmax: maxScore.score,
+      tmaxSignalId: maxScore.signal?.id ?? null,
+      tmaxTop5Percent: null,
+      tmaxTop5PercentReason:
+        '当前候选指标未包含账号近期历史分位基准，需由 Agent 调工具补证据或请求人工复核。',
+    };
+  }
 }
 
 function isPostSignal(signalType: string) {
   return signalType === 'post' || signalType.endsWith('_post');
+}
+
+function calculatePostTrafficScore(signal: Signal) {
+  const metrics = signal.metrics;
+  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) {
+    return 0;
+  }
+
+  return (
+    getNumber(metrics.likes) +
+    getNumber(metrics.reposts) +
+    getNumber(metrics.replies) +
+    getNumber(metrics.quotes)
+  );
+}
+
+function getNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

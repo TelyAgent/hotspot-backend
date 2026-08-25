@@ -18,6 +18,11 @@ export class SignalController {
     });
   }
 
+  @Get('evidence')
+  listEvidenceByIds(@Query('ids') ids?: string) {
+    return this.evidenceRepository.findByIds(parseIds(ids));
+  }
+
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.signalRepository.findById(id);
@@ -30,4 +35,13 @@ export class SignalController {
       take: parseTake(take),
     });
   }
+}
+
+function parseIds(value?: string): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 100);
 }

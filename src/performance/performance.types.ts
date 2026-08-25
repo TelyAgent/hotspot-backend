@@ -3,6 +3,8 @@ import { JsonObject } from '../common/types/json.type';
 export interface PublishedPost {
   id: string;
   contentTaskId: string;
+  accountId?: string | null;
+  accountName?: string | null;
   platform: string;
   url: string;
   publishedAt: Date;
@@ -15,6 +17,8 @@ export interface PublishedPost {
 
 export interface CreatePublishedPostInput {
   contentTaskId: string;
+  accountId?: string | null;
+  accountName?: string | null;
   platform: string;
   url: string;
   publishedAt: Date;

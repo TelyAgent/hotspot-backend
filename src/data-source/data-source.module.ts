@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { OpportunityModule } from '../opportunity/opportunity.module';
 import { ProjectConfigModule } from '../project-config/project-config.module';
 import { SignalModule } from '../signal/signal.module';
 import { DataSourceController } from './data-source.controller';
@@ -6,6 +7,7 @@ import { MockDataSourcePlugin } from './plugins/mock/mock.plugin';
 import { FutureEventsPlugin } from './plugins/future-events/future-events.plugin';
 import { XAccountPostsPlugin } from './plugins/x-account-posts/x-account-posts.plugin';
 import { XTrendsPlugin } from './plugins/x-trends/x-trends.plugin';
+import { XTrendSnapshotService } from './plugins/x-trends/x-trend-snapshot.service';
 import { YoutubeVideosPlugin } from './plugins/youtube-videos/youtube-videos.plugin';
 import { DataSourcePluginRegistrationService } from './registry/data-source-plugin-registration.service';
 import { DataSourcePluginRegistry } from './registry/data-source-plugin.registry';
@@ -14,13 +16,14 @@ import { CollectionRunnerService } from './runner/collection-runner.service';
 import { DataSourceSchedulerService } from './scheduler/data-source-scheduler.service';
 
 @Module({
-  imports: [SignalModule, ProjectConfigModule],
+  imports: [SignalModule, ProjectConfigModule, OpportunityModule],
   controllers: [DataSourceController],
   providers: [
     MockDataSourcePlugin,
     FutureEventsPlugin,
     XAccountPostsPlugin,
     XTrendsPlugin,
+    XTrendSnapshotService,
     YoutubeVideosPlugin,
     DataSourcePluginRegistry,
     DataSourcePluginRegistrationService,

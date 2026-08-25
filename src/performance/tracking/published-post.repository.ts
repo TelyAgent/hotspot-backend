@@ -13,6 +13,8 @@ export class PublishedPostRepository {
     return this.prisma.publishedPost.create({
       data: {
         contentTaskId: input.contentTaskId,
+        accountId: input.accountId ?? null,
+        accountName: input.accountName ?? null,
         platform: input.platform,
         url: input.url,
         publishedAt: input.publishedAt,

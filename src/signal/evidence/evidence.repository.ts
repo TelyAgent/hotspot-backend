@@ -19,6 +19,23 @@ export class EvidenceRepository {
     }) as Promise<EvidenceItem | null>;
   }
 
+  async findByIds(ids: string[]): Promise<EvidenceItem[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    return this.prisma.evidenceItem.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+    }) as Promise<EvidenceItem[]>;
+  }
+
   async findMany(input: {
     signalId?: string;
     take?: number;

@@ -44,6 +44,7 @@ model Signal {
   rawItem       RawItem        @relation(fields: [rawItemId], references: [id], onDelete: Cascade)
   evidenceItems EvidenceItem[]
   youtubeVideoAnalyses YoutubeVideoAnalysis[]
+  opportunityMiningRuns OpportunityMiningSignalRun[]
 
   @@index([source, signalType, observedAt])
   @@map("signals")
@@ -118,6 +119,70 @@ model CollectionRun {
   @@index([jobId, startedAt])
   @@index([pluginId, capabilityId, startedAt])
   @@map("collection_runs")
+
+  xTrendSnapshots XTrendSnapshot[]
+}
+
+model XTrendSnapshot {
+  id              String   @id @default(cuid())
+  collectionRunId String
+  region          String
+  observedAt      DateTime
+  itemCount       Int
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  collectionRun CollectionRun         @relation(fields: [collectionRunId], references: [id], onDelete: Cascade)
+  items         XTrendSnapshotItem[]
+  diffs         XTrendSnapshotDiff[]  @relation("CurrentXTrendSnapshotDiff")
+  nextDiffs     XTrendSnapshotDiff[]  @relation("PreviousXTrendSnapshotDiff")
+
+  @@unique([collectionRunId, region])
+  @@index([region, observedAt])
+  @@map("x_trend_snapshots")
+}
+
+model XTrendSnapshotItem {
+  id         String   @id @default(cuid())
+  snapshotId String
+  name       String
+  query      String
+  rank       Int
+  url        String?
+  heat       String?
+  category   String?
+  raw        Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  snapshot XTrendSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, query])
+  @@index([query, rank])
+  @@map("x_trend_snapshot_items")
+}
+
+model XTrendSnapshotDiff {
+  id                 String   @id @default(cuid())
+  snapshotId         String
+  previousSnapshotId String?
+  region             String
+  name               String
+  query              String
+  previousRank       Int?
+  currentRank        Int?
+  rankDelta          Int?
+  diffType           String
+  observedAt         DateTime
+  createdAt          DateTime @default(now())
+
+  snapshot         XTrendSnapshot  @relation("CurrentXTrendSnapshotDiff", fields: [snapshotId], references: [id], onDelete: Cascade)
+  previousSnapshot XTrendSnapshot? @relation("PreviousXTrendSnapshotDiff", fields: [previousSnapshotId], references: [id], onDelete: SetNull)
+
+  @@index([region, observedAt])
+  @@index([query, observedAt])
+  @@map("x_trend_snapshot_diffs")
 }
 
 model ProjectConfig {
@@ -184,6 +249,46 @@ model AgentToolCall {
   @@index([runId, startedAt])
   @@index([toolName, startedAt])
   @@map("agent_tool_calls")
+}
+
+model OpportunityRulePack {
+  id          String   @id @default(cuid())
+  version     Int
+  status      String
+  basePath    String
+  manifest    Json
+  description String?
+  generatedBy String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  miningRuns OpportunityMiningSignalRun[]
+
+  @@unique([version])
+  @@index([status, version])
+  @@map("opportunity_rule_packs")
+}
+
+model OpportunityMiningSignalRun {
+  id             String   @id @default(cuid())
+  signalId       String
+  agentRunId     String?
+  rulePackId     String?
+  status         String
+  decision       String?
+  targetType     String?
+  targetId       String?
+  idempotencyKey String   @unique
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  signal   Signal               @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  rulePack OpportunityRulePack?  @relation(fields: [rulePackId], references: [id], onDelete: SetNull)
+
+  @@index([signalId, createdAt])
+  @@index([status, createdAt])
+  @@map("opportunity_mining_signal_runs")
 }
 
 model FutureEvent {
@@ -544,6 +649,8 @@ model ContentDraft {
 model PublishedPost {
   id            String    @id @default(cuid())
   contentTaskId String
+  accountId     String?
+  accountName   String?
   platform      String
   url           String
   publishedAt   DateTime
@@ -556,6 +663,7 @@ model PublishedPost {
   metricSnapshots PostMetricSnapshot[]
 
   @@index([contentTaskId])
+  @@index([accountId])
   @@index([trackingStatus, publishedAt])
   @@map("published_posts")
 }

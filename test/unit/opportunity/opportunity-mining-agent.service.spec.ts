@@ -1,5 +1,5 @@
 import { AgentWorkflowEngine } from '../../../src/agent/workflow-engine/agent-workflow-engine.interface';
-import { DomainError } from '../../../src/common/errors/domain-error';
+import { OpportunityMiningDecisionValidator } from '../../../src/opportunity/mining/opportunity-mining-decision.validator';
 import { OpportunityMiningAgentService } from '../../../src/opportunity/mining/opportunity-mining-agent.service';
 import { EvidenceItem } from '../../../src/signal/evidence/evidence.types';
 
@@ -27,7 +27,7 @@ describe('OpportunityMiningAgentService', () => {
         }),
       ),
     } as unknown as AgentWorkflowEngine;
-    const service = new OpportunityMiningAgentService(workflowEngine);
+    const service = createService(workflowEngine);
 
     const result = await service.evaluate({
       instruction: '判断是否形成机会。',
@@ -42,6 +42,83 @@ describe('OpportunityMiningAgentService', () => {
     );
     expect(result.decision).toBe('create_opportunity');
     expect(result.evidenceRefs).toEqual(['ev_1']);
+  });
+
+  it('passes rule documents and evidence memory to workflow engine', async () => {
+    const workflowEngine = {
+      run: jest.fn(() =>
+        Promise.resolve({
+          runId: 'run_1',
+          status: 'succeeded',
+          result: {
+            decision: 'create_insight',
+            title: 'OpenAI 新模型发布',
+            opportunityType: 'industry_topic',
+            summary: 'OpenAI 新模型发布引发开发者讨论。',
+            whyNow: '官方发布后短时间内出现讨论。',
+            whyItMatters: '该事件影响 AI 产品策略。',
+            productAngles: ['展示如何监控 AI 产品发布'],
+            contentWindow: '24-48 小时',
+            confidence: 'medium',
+            evidenceRefs: ['ev_1'],
+            missingData: [],
+            riskNotes: [],
+            metadata: {
+              ruleDocumentRefs: ['global-principles'],
+            },
+          },
+        }),
+      ),
+    } as unknown as AgentWorkflowEngine;
+    const service = createService(workflowEngine);
+
+    await service.evaluateGoal(
+      {
+        id: 'goal_1',
+        type: 'detect_opportunity',
+        instruction: '判断是否形成机会。',
+        seedSignalIds: ['sig_1'],
+        seedEvidenceIds: ['ev_1'],
+        ruleDocuments: [
+          {
+            id: 'global-principles',
+            title: '全局判断原则',
+            path: 'memory://global-principles.md',
+            markdown: '# 全局判断原则',
+          },
+        ],
+        constraints: {
+          maxToolCalls: 3,
+          maxRunMs: 60_000,
+          allowedToolCategories: ['read'],
+          writeMode: 'suggest_only',
+        },
+      },
+      {
+        evidence: [createEvidence()],
+      },
+    );
+
+    expect(workflowEngine.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'opportunity_mining',
+        maxSteps: 3,
+        goal: expect.objectContaining({
+          ruleDocuments: [
+            expect.objectContaining({
+              id: 'global-principles',
+            }),
+          ],
+          evidenceMemory: expect.objectContaining({
+            evidence: [
+              expect.objectContaining({
+                id: 'ev_1',
+              }),
+            ],
+          }),
+        }),
+      }),
+    );
   });
 
   it('returns request_human_review when evidence is insufficient', async () => {
@@ -67,7 +144,7 @@ describe('OpportunityMiningAgentService', () => {
         }),
       ),
     } as unknown as AgentWorkflowEngine;
-    const service = new OpportunityMiningAgentService(workflowEngine);
+    const service = createService(workflowEngine);
 
     const result = await service.evaluate({
       instruction: '判断是否形成机会。',
@@ -100,7 +177,7 @@ describe('OpportunityMiningAgentService', () => {
         }),
       ),
     } as unknown as AgentWorkflowEngine;
-    const service = new OpportunityMiningAgentService(workflowEngine);
+    const service = createService(workflowEngine);
 
     await expect(
       service.evaluate({
@@ -112,7 +189,41 @@ describe('OpportunityMiningAgentService', () => {
       }),
     );
   });
+
+  it('rejects goals without rule documents', async () => {
+    const workflowEngine = {
+      run: jest.fn(),
+    } as unknown as AgentWorkflowEngine;
+    const service = createService(workflowEngine);
+
+    await expect(
+      service.evaluateGoal({
+        id: 'goal_1',
+        type: 'detect_opportunity',
+        instruction: '判断是否形成机会。',
+        seedSignalIds: [],
+        ruleDocuments: [],
+        constraints: {
+          maxToolCalls: 3,
+          maxRunMs: 60_000,
+          allowedToolCategories: ['read'],
+          writeMode: 'suggest_only',
+        },
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: 'OPPORTUNITY_MINING_RULE_DOCUMENTS_REQUIRED',
+      }),
+    );
+  });
 });
+
+function createService(workflowEngine: AgentWorkflowEngine) {
+  return new OpportunityMiningAgentService(
+    workflowEngine,
+    new OpportunityMiningDecisionValidator(),
+  );
+}
 
 function createEvidence(): EvidenceItem {
   return {

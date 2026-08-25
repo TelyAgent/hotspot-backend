@@ -123,6 +123,43 @@ describe('OpenAiModelProvider', () => {
     );
   });
 
+  it('adds a strict output contract for opportunity rule pack editor', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            type: 'final_decision',
+            decision: {
+              markdown: '# 修改后的规则',
+              changeSummary: '更新规则。',
+              suggestions: [],
+            },
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await provider.completeStructured({
+      ...createInput(),
+      agentType: 'opportunity_rule_pack_editor',
+    });
+
+    const body = JSON.parse(
+      String((global.fetch as jest.Mock).mock.calls[0][1].body),
+    ) as { input: Array<{ content: Array<{ text: string }> }> };
+    expect(body.input[0].content[0].text).toContain(
+      '当前 agentType=opportunity_rule_pack_editor。',
+    );
+    expect(body.input[0].content[0].text).toContain(
+      '"markdown":"修改后的完整 Markdown 文档"',
+    );
+  });
+
   it('throws a domain error when the API fails', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve(

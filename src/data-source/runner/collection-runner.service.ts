@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { OpportunityMiningSchedulerService } from '../../opportunity/mining/opportunity-mining-scheduler.service';
+import { XTrendSnapshotService } from '../plugins/x-trends/x-trend-snapshot.service';
 import { EvidenceService } from '../../signal/evidence/evidence.service';
 import { RawItemService } from '../../signal/raw-item/raw-item.service';
 import { SignalService } from '../../signal/signal/signal.service';
@@ -18,6 +20,10 @@ export class CollectionRunnerService {
     private readonly rawItemService: RawItemService,
     private readonly signalService: SignalService,
     private readonly evidenceService: EvidenceService,
+    @Optional()
+    private readonly xTrendSnapshotService?: XTrendSnapshotService,
+    @Optional()
+    private readonly opportunityMiningScheduler?: OpportunityMiningSchedulerService,
   ) {}
 
   async run(jobConfig: CollectionJobConfig): Promise<CollectionRun> {
@@ -80,6 +86,19 @@ export class CollectionRunnerService {
         }
       }
 
+      if (jobConfig.pluginId === 'x-trends') {
+        await this.xTrendSnapshotService?.createSnapshotsForCollection({
+          collectionRunId: run.id,
+          observedAt,
+          rawItems: result.rawItems,
+        });
+      }
+
+      const opportunityMining =
+        signalCount > 0
+          ? await this.opportunityMiningScheduler?.runDueMining(observedAt)
+          : undefined;
+
       return this.collectionRunRepository.markSucceeded({
         runId: run.id,
         finishedAt: new Date(),
@@ -89,6 +108,7 @@ export class CollectionRunnerService {
           rawItemCount: result.rawItems.length,
           signalCount,
           evidenceCount,
+          ...(opportunityMining ? { opportunityMining } : {}),
         } as Prisma.InputJsonValue,
       });
     } catch (error) {

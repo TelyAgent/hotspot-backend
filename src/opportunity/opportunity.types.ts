@@ -35,6 +35,45 @@ export interface Event {
   updatedAt: Date;
 }
 
+export interface OpportunityRulePackRecord {
+  id: string;
+  version: number;
+  status: 'draft' | 'active' | 'archived';
+  basePath: string;
+  manifest: JsonObject;
+  description?: string | null;
+  generatedBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OpportunityMiningSignalRun {
+  id: string;
+  signalId: string;
+  agentRunId?: string | null;
+  rulePackId?: string | null;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
+  decision?: string | null;
+  targetType?: string | null;
+  targetId?: string | null;
+  idempotencyKey: string;
+  errorMessage?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OpportunityMiningSignalRunWithSignal
+  extends OpportunityMiningSignalRun {
+  signal?: {
+    id: string;
+    title: string;
+    signalType: string;
+    source: string;
+    platform?: string | null;
+    observedAt: Date;
+  } | null;
+}
+
 export interface OpportunityMiningDecision {
   decision:
     | 'create_opportunity'
@@ -91,4 +130,25 @@ export interface CreateEventInput {
   riskNotes: string[];
   confidence: OpportunityConfidence;
   status?: Event['status'];
+}
+
+export interface CreateOpportunityRulePackInput {
+  version: number;
+  status: OpportunityRulePackRecord['status'];
+  basePath: string;
+  manifest: JsonObject;
+  description?: string | null;
+  generatedBy: string;
+}
+
+export interface CreateOpportunityMiningSignalRunInput {
+  signalId: string;
+  agentRunId?: string | null;
+  rulePackId?: string | null;
+  status: OpportunityMiningSignalRun['status'];
+  decision?: string | null;
+  targetType?: string | null;
+  targetId?: string | null;
+  idempotencyKey: string;
+  errorMessage?: string | null;
 }

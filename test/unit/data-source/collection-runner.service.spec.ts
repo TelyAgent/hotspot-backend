@@ -5,6 +5,8 @@ import { CollectionRunRepository } from '../../../src/data-source/runner/collect
 import { CollectionRunnerService } from '../../../src/data-source/runner/collection-runner.service';
 import { DataSourcePluginRegistry } from '../../../src/data-source/registry/data-source-plugin.registry';
 import { MockDataSourcePlugin } from '../../../src/data-source/plugins/mock/mock.plugin';
+import { XTrendSnapshotService } from '../../../src/data-source/plugins/x-trends/x-trend-snapshot.service';
+import { OpportunityMiningSchedulerService } from '../../../src/opportunity/mining/opportunity-mining-scheduler.service';
 
 describe('CollectionRunnerService', () => {
   it('runs a registered plugin and stores raw items', async () => {
@@ -191,6 +193,14 @@ describe('CollectionRunnerService', () => {
     const evidenceService = {
       createFromSignal: jest.fn(),
     } as unknown as EvidenceService;
+    const opportunityMiningScheduler = {
+      runDueMining: jest.fn(() =>
+        Promise.resolve({
+          selectedCount: 1,
+          succeededCount: 1,
+        }),
+      ),
+    } as unknown as OpportunityMiningSchedulerService;
 
     const service = new CollectionRunnerService(
       registry,
@@ -198,6 +208,8 @@ describe('CollectionRunnerService', () => {
       rawItemService,
       signalService,
       evidenceService,
+      undefined,
+      opportunityMiningScheduler,
     );
 
     const result = await service.run({
@@ -228,8 +240,107 @@ describe('CollectionRunnerService', () => {
         rawItemCount: 1,
         signalCount: 1,
         evidenceCount: 1,
+        opportunityMining: {
+          selectedCount: 1,
+          succeededCount: 1,
+        },
       }),
     );
+    expect(opportunityMiningScheduler.runDueMining).toHaveBeenCalledWith(
+      new Date('2026-08-24T10:30:00.000Z'),
+    );
+  });
+
+  it('creates x trend snapshots after x trends collection succeeds', async () => {
+    const registry = new DataSourcePluginRegistry();
+    registry.register({
+      id: 'x-trends',
+      name: 'X Trends',
+      platform: 'x',
+      capabilities: [],
+      collect: jest.fn(async (input) => ({
+        rawItems: [
+          {
+            source: 'x',
+            sourceType: 'x_trend',
+            sourceItemId: 'United States:1:OpenAI',
+            observedAt: input.context.observedAt,
+            payload: {
+              name: 'OpenAI',
+              query: 'OpenAI',
+              region: 'United States',
+              rank: 1,
+            },
+          },
+        ],
+      })),
+    });
+    const collectionRunRepository = {
+      createStarted: jest.fn(() => ({
+        id: 'run_x_trends',
+        jobId: 'job_x_trends',
+        pluginId: 'x-trends',
+        capabilityId: 'x.trends.list',
+        status: 'running',
+        startedAt: new Date('2026-08-24T10:00:00.000Z'),
+        rawItemCount: 0,
+        createdAt: new Date('2026-08-24T10:00:00.000Z'),
+        updatedAt: new Date('2026-08-24T10:00:00.000Z'),
+      })),
+      markSucceeded: jest.fn((input) => ({
+        id: input.runId,
+        jobId: 'job_x_trends',
+        pluginId: 'x-trends',
+        capabilityId: 'x.trends.list',
+        status: 'succeeded',
+        startedAt: new Date('2026-08-24T10:00:00.000Z'),
+        finishedAt: input.finishedAt,
+        rawItemCount: input.rawItemCount,
+        outputSummary: input.outputSummary,
+        createdAt: new Date('2026-08-24T10:00:00.000Z'),
+        updatedAt: new Date('2026-08-24T10:00:00.000Z'),
+      })),
+      markFailed: jest.fn(),
+    } as unknown as CollectionRunRepository;
+    const rawItemService = {
+      create: jest.fn((input) => ({
+        id: 'raw_x_trend',
+        ...input,
+        observedAtBucket: new Date('2026-08-24T10:00:00.000Z'),
+        dedupeKey: 'x:x_trend:United States:1:OpenAI:2026-08-24T10:00:00.000Z',
+        createdAt: new Date('2026-08-24T10:00:00.000Z'),
+        updatedAt: new Date('2026-08-24T10:00:00.000Z'),
+      })),
+    } as unknown as RawItemService;
+    const snapshotService = {
+      createSnapshotsForCollection: jest.fn(),
+    } as unknown as XTrendSnapshotService;
+    const service = new CollectionRunnerService(
+      registry,
+      collectionRunRepository,
+      rawItemService,
+      {} as unknown as SignalService,
+      {} as unknown as EvidenceService,
+      snapshotService,
+    );
+
+    await service.run({
+      id: 'job_x_trends',
+      pluginId: 'x-trends',
+      capabilityId: 'x.trends.list',
+      params: {},
+      observedAt: new Date('2026-08-24T10:30:00.000Z'),
+    });
+
+    expect(snapshotService.createSnapshotsForCollection).toHaveBeenCalledWith({
+      collectionRunId: 'run_x_trends',
+      observedAt: new Date('2026-08-24T10:30:00.000Z'),
+      rawItems: [
+        expect.objectContaining({
+          sourceItemId: 'United States:1:OpenAI',
+        }),
+      ],
+    });
   });
 
   it('records plugin failure without throwing', async () => {

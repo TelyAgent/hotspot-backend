@@ -140,8 +140,12 @@ export class OpenAiModelProvider implements ModelProvider {
     const contracts: Record<string, string> = {
       opportunity_mining: [
         '当前 agentType=opportunity_mining。',
+        '你必须先阅读 goal.ruleDocuments。规则文档是业务判断依据，但事实只能来自 goal.evidenceMemory、goal.sourceContext、evidence 或 toolResults。',
+        '你需要根据 Signal 类型、目标和规则文档决定是否调用工具补充证据。',
+        '最终决策必须在 metadata.ruleDocumentRefs 中列出主要参考的规则文档 id。',
+        '如果 goal.ruleDocuments 缺失或为空，应输出 request_human_review，并在 missingData 中说明缺少规则文档。',
         '最终输出必须严格为：',
-        '{"type":"final_decision","decision":{"decision":"create_opportunity|create_event|update_existing_opportunity|create_insight|ignore|request_human_review","title":"中文标题","opportunityType":"news_event|industry_topic|viral_post|viral_video|meme|competitor_signal|future_event|product_angle|unknown","summary":"中文摘要","whyNow":"为什么现在值得做","whyItMatters":"为什么重要","productAngles":["产品承接角度"],"contentWindow":"内容窗口","confidence":"high|medium|low","evidenceRefs":["证据ID"],"missingData":["缺失数据"],"riskNotes":["风险说明"]}}',
+        '{"type":"final_decision","decision":{"decision":"create_opportunity|create_event|update_existing_opportunity|create_insight|ignore|request_human_review","title":"中文标题","opportunityType":"news_event|industry_topic|viral_post|viral_video|meme|competitor_signal|future_event|product_angle|unknown","summary":"中文摘要","whyNow":"为什么现在值得做","whyItMatters":"为什么重要","productAngles":["产品承接角度"],"contentWindow":"内容窗口","confidence":"high|medium|low","evidenceRefs":["证据ID"],"missingData":["缺失数据"],"riskNotes":["风险说明"],"metadata":{"ruleDocumentRefs":["规则文档ID"]}}}',
       ].join('\n'),
       assignment: [
         '当前 agentType=assignment。',
@@ -152,6 +156,16 @@ export class OpenAiModelProvider implements ModelProvider {
         '当前 agentType=content_generation。',
         '最终输出必须严格为：',
         '{"type":"final_decision","decision":{"body":"中文内容正文","evidenceRefs":["证据ID"],"riskNotes":["风险说明"]}}',
+      ].join('\n'),
+      opportunity_rule_pack_editor: [
+        '当前 agentType=opportunity_rule_pack_editor。',
+        '你要根据 goal.instruction 修改 goal.currentMarkdown 中的一份热点挖掘规则文档。',
+        '你必须返回修改后的完整 Markdown 文档，不能只返回 diff，不能省略未修改部分。',
+        'Markdown 正文必须保持中文表达，除非原文里的专有名词、接口名、字段名本来就是英文。',
+        '不要改变系统边界：规则修改只能影响规则文本，不能声称已经修改代码、数据库、插件或调度器。',
+        '如果运营要求不清楚，也要做最保守的可执行修改，并在 suggestions 中说明需要人工复核的点。',
+        '最终输出必须严格为：',
+        '{"type":"final_decision","decision":{"markdown":"修改后的完整 Markdown 文档","changeSummary":"中文修改摘要","suggestions":["启用前应注意的测试建议或风险"]}}',
       ].join('\n'),
       future_event_discovery: [
         '当前 agentType=future_event_discovery。',

@@ -4,8 +4,13 @@ import { PrismaService } from '../database/prisma.service';
 import {
   CreateEventInput,
   CreateOpportunityInput,
+  CreateOpportunityMiningSignalRunInput,
+  CreateOpportunityRulePackInput,
   Event,
   Opportunity,
+  OpportunityMiningSignalRun,
+  OpportunityMiningSignalRunWithSignal,
+  OpportunityRulePackRecord,
 } from './opportunity.types';
 
 @Injectable()
@@ -145,5 +150,150 @@ export class OpportunityRepository {
         status: input.status,
       },
     }) as unknown as Promise<Event>;
+  }
+
+  async createRulePack(
+    input: CreateOpportunityRulePackInput,
+  ): Promise<OpportunityRulePackRecord> {
+    return this.prisma.$transaction(async (tx) => {
+      if (input.status === 'active') {
+        await tx.opportunityRulePack.updateMany({
+          where: {
+            status: 'active',
+          },
+          data: {
+            status: 'archived',
+          },
+        });
+      }
+
+      return tx.opportunityRulePack.create({
+        data: {
+          version: input.version,
+          status: input.status,
+          basePath: input.basePath,
+          manifest: input.manifest as Prisma.InputJsonValue,
+          description: input.description ?? null,
+          generatedBy: input.generatedBy,
+        },
+      }) as unknown as Promise<OpportunityRulePackRecord>;
+    });
+  }
+
+  async findActiveRulePack(): Promise<OpportunityRulePackRecord | null> {
+    return this.prisma.opportunityRulePack.findFirst({
+      where: {
+        status: 'active',
+      },
+      orderBy: {
+        version: 'desc',
+      },
+    }) as unknown as Promise<OpportunityRulePackRecord | null>;
+  }
+
+  async findRulePackById(id: string): Promise<OpportunityRulePackRecord | null> {
+    return this.prisma.opportunityRulePack.findUnique({
+      where: {
+        id,
+      },
+    }) as unknown as Promise<OpportunityRulePackRecord | null>;
+  }
+
+  async findLatestRulePackVersion(): Promise<number> {
+    const latest = await this.prisma.opportunityRulePack.findFirst({
+      orderBy: {
+        version: 'desc',
+      },
+      select: {
+        version: true,
+      },
+    });
+
+    return latest?.version ?? 0;
+  }
+
+  async activateRulePack(id: string): Promise<OpportunityRulePackRecord> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.opportunityRulePack.updateMany({
+        where: {
+          status: 'active',
+          id: {
+            not: id,
+          },
+        },
+        data: {
+          status: 'archived',
+        },
+      });
+
+      return tx.opportunityRulePack.update({
+        where: {
+          id,
+        },
+        data: {
+          status: 'active',
+        },
+      });
+    }) as unknown as Promise<OpportunityRulePackRecord>;
+  }
+
+  async createMiningSignalRun(
+    input: CreateOpportunityMiningSignalRunInput,
+  ): Promise<OpportunityMiningSignalRun> {
+    return this.prisma.opportunityMiningSignalRun.create({
+      data: {
+        signalId: input.signalId,
+        agentRunId: input.agentRunId ?? null,
+        rulePackId: input.rulePackId ?? null,
+        status: input.status,
+        decision: input.decision ?? null,
+        targetType: input.targetType ?? null,
+        targetId: input.targetId ?? null,
+        idempotencyKey: input.idempotencyKey,
+        errorMessage: input.errorMessage ?? null,
+      },
+    }) as unknown as Promise<OpportunityMiningSignalRun>;
+  }
+
+  async findRecentMiningRunBySignal(
+    signalId: string,
+  ): Promise<OpportunityMiningSignalRun | null> {
+    return this.prisma.opportunityMiningSignalRun.findFirst({
+      where: {
+        signalId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    }) as unknown as Promise<OpportunityMiningSignalRun | null>;
+  }
+
+  async listMiningSignalRuns(input: {
+    status?: string;
+    signalId?: string;
+    take?: number;
+  } = {}): Promise<OpportunityMiningSignalRunWithSignal[]> {
+    return this.prisma.opportunityMiningSignalRun.findMany({
+      where: {
+        status: input.status,
+        signalId: input.signalId,
+      },
+      include: {
+        signal: {
+          select: {
+            id: true,
+            title: true,
+            signalType: true,
+            source: true,
+            platform: true,
+            observedAt: true,
+          },
+        },
+      },
+      take: input.take ?? 50,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    }) as unknown as Promise<OpportunityMiningSignalRunWithSignal[]>;
   }
 }

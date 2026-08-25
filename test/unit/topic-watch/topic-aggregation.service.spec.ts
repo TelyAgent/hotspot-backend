@@ -43,6 +43,13 @@ describe('TopicAggregationService', () => {
         accountCount: 2,
         representativeSignalIds: ['sig_1', 'sig_2'],
         entities: ['OpenAI'],
+        metrics: expect.objectContaining({
+          b3h: 2,
+          b24h: 2,
+          tmax: 140,
+          tmaxSignalId: 'sig_2',
+          tmaxTop5Percent: null,
+        }),
       }),
     );
   });
@@ -52,6 +59,7 @@ function createSignal(input: {
   id: string;
   title: string;
   authorHandle: string;
+  metrics?: Record<string, number>;
 }): Signal {
   return {
     id: input.id,
@@ -63,7 +71,12 @@ function createSignal(input: {
     summary: input.title,
     observedAt: new Date('2026-08-24T10:10:00.000Z'),
     rawRefs: [`raw_${input.id}`],
-    metrics: null,
+    metrics: input.metrics ?? {
+      likes: input.id === 'sig_2' ? 100 : 10,
+      reposts: input.id === 'sig_2' ? 20 : 2,
+      replies: input.id === 'sig_2' ? 20 : 1,
+      views: input.id === 'sig_2' ? 1000 : 100,
+    },
     metadata: {
       entities: ['OpenAI'],
       keywords: ['model', 'release'],

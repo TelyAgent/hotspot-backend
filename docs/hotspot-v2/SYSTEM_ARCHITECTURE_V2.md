@@ -37,7 +37,7 @@ OpenClaw 的核心价值更偏向：
 采集数据
 → 整理信号
 → 挖掘机会
-→ 分发账号任务
+→ 热点运营
 → 生成内容
 → 追踪效果
 → 反向优化策略
@@ -230,7 +230,7 @@ Signal
 - 平台差异不会污染 Agent 主流程。
 - Agent 的判断有证据来源。
 - 原始数据可以追溯。
-- 新增平台不会破坏机会挖掘、任务分发和内容生成链路。
+- 新增平台不会破坏机会挖掘、热点运营和内容生成链路。
 
 ## 6. 核心业务链路
 
@@ -242,7 +242,7 @@ V2 的主链路应该是：
 → 未来事件发现与监控规划
 → 主题追踪与动态抓取规划
 → 机会挖掘
-→ 任务分发
+→ 热点运营
 → 内容生成
 → 效果追踪
 → 策略优化
@@ -256,7 +256,7 @@ Data Collection Plugin
 → Future Event Agent
 → Topic Watch Agent
 → Opportunity Mining Agent
-→ Assignment Agent
+→ Hotspot Operation Workspace
 → Content Generation Agent
 → Performance Tracking
 → Strategy Feedback
@@ -316,11 +316,10 @@ flowchart TD
     EventStore["Event Store"]
   end
 
-  subgraph Assignment["任务分发子系统"]
+  subgraph Operation["热点运营子系统"]
     AccountProvider["Account Provider"]
-    AssignmentAgent["Assignment Agent"]
-    AssignmentDecision["Assignment Decision"]
-    ContentTasks["Content Tasks"]
+    OperationWorkspace["Hotspot Operation Workspace"]
+    OperationContext["Operation Context"]
   end
 
   subgraph Content["内容生成子系统"]
@@ -337,7 +336,7 @@ flowchart TD
 
   subgraph Console["运营工作台"]
     Dashboard["监控与机会看板"]
-    AssignmentUI["任务分发确认"]
+    OperationUI["热点运营弹窗"]
     ContentUI["内容草稿审核"]
     InsightUI["效果复盘"]
   end
@@ -374,13 +373,12 @@ flowchart TD
   OpportunityAgent --> OpportunityStore
   OpportunityAgent --> EventStore
 
-  OpportunityStore --> AssignmentAgent
-  EventStore --> AssignmentAgent
-  AccountProvider --> AssignmentAgent
-  AssignmentAgent --> AssignmentDecision
-  AssignmentDecision --> ContentTasks
+  OpportunityStore --> OperationWorkspace
+  EventStore --> OperationWorkspace
+  AccountProvider --> OperationWorkspace
+  OperationWorkspace --> OperationContext
 
-  ContentTasks --> ContentAgent
+  OperationContext --> ContentAgent
   EvidenceStore --> ContentAgent
   ContentAgent --> DraftStore
   DraftStore --> ReviewFlow
@@ -389,13 +387,13 @@ flowchart TD
   PublishedPosts --> MetricSnapshots
   MetricSnapshots --> StrategyFeedback
   StrategyFeedback --> OpportunityAgent
-  StrategyFeedback --> AssignmentAgent
+  StrategyFeedback --> OperationWorkspace
   StrategyFeedback --> ContentAgent
 
   ToolRegistry --> WorkflowEngine
   ProviderRegistry --> ToolRegistry
   WorkflowEngine --> OpportunityAgent
-  WorkflowEngine --> AssignmentAgent
+  WorkflowEngine --> OperationWorkspace
   WorkflowEngine --> ContentAgent
   WorkflowEngine --> FutureDiscovery
   WorkflowEngine --> FutureMonitoring
@@ -405,7 +403,7 @@ flowchart TD
   SignalStore --> Dashboard
   TopicDecision --> Dashboard
   OpportunityStore --> Dashboard
-  AssignmentDecision --> AssignmentUI
+  OperationContext --> OperationUI
   DraftStore --> ContentUI
   MetricSnapshots --> InsightUI
 ```
@@ -641,27 +639,24 @@ Human Review Request
 docs/hotspot-v2/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md
 ```
 
-## 12. 任务分发层
+## 12. 热点运营层
 
-任务分发层不应该是：
+新系统不再设计独立的“任务分发层”，也不再把 Event 自动拆成一组账号任务。
 
-```text
-事件类型 → 账号类型 → 任务
-```
-
-而应该是：
+热点形成之后，系统提供的是一个围绕 Event / Opportunity 的运营工作区：
 
 ```text
 Event / Opportunity
-→ Assignment Agent
-→ 获取账号
-→ 理解账号人设和规则
-→ 检查历史任务
-→ 判断适合账号和角度
-→ 输出任务分发建议
+→ 热点运营工作区
+→ 获取可用运营账号
+→ 展示账号人设、内容规则和历史表现
+→ 运营选择承接账号和角度
+→ 生成候选内容
+→ 人工发布并回填链接
+→ 进入效果追踪
 ```
 
-账号来源通过 Provider 抽象：
+账号来源仍然通过 Provider 抽象：
 
 ```ts
 interface AccountProvider {
@@ -679,26 +674,25 @@ interface AccountProvider {
 - 运营中台。
 - 后续平台接口。
 
-任务分发 Agent 只负责：
+热点运营层只负责组织运营上下文：
 
 ```text
-谁来做
-做什么角度
-为什么这么分配
-有什么风险
+当前热点是什么
+有哪些事实依据
+有哪些账号可承接
+每个账号的人设和内容规则是什么
+已经生成了哪些候选
+哪些发布链接已经回填
+后续效果追踪状态如何
 ```
 
-不负责直接生成正文，不负责发布。
+系统可以用 Agent 辅助推荐承接账号和角度，但这个能力只是热点运营工作区里的建议能力，不再作为独立的任务分发业务存在。
 
-详细设计见：
-
-```text
-docs/hotspot-v2/TASK_ASSIGNMENT_AGENT_ARCHITECTURE.md
-```
+这样可以避免系统变成一个下游任务派发工具。内容运营的入口始终围绕热点本身，而不是围绕任务列表。
 
 ## 13. 内容生成层
 
-内容生成层接收任务分发结果。
+内容生成层接收热点运营层整理出的运营上下文。
 
 输入不应该只有事件文本，而应该包含：
 
@@ -726,13 +720,13 @@ interface ContentGenerationInput {
 
 内容生成 Agent 的职责是：
 
-- 根据账号任务生成草稿。
+- 根据热点运营上下文生成草稿。
 - 支持运营人员追加要求后重新生成。
 - 保留引用证据。
 - 区分事实和观点。
 - 遵守账号和平台约束。
 
-它不负责判断这个事件值不值得做，也不负责判断该分配给哪个账号。
+它不负责判断这个事件值不值得做，也不负责替运营人员创建分发任务。
 
 ## 14. 效果追踪层
 
@@ -744,7 +738,7 @@ interface ContentGenerationInput {
 - 记录点赞、回复、转发、引用、浏览量。
 - 按规则调整追踪频率和追踪期限。
 - 标记表现良好内容。
-- 将效果反馈给机会挖掘、任务分发和内容生成策略。
+- 将效果反馈给机会挖掘、热点运营和内容生成策略。
 
 追踪数据可以反向优化：
 
@@ -818,7 +812,7 @@ Agent 只看 Tool，不直接看 Provider
 LocalAccountProvider
 ExternalAccountProvider
 → accounts.listAvailable 工具
-→ Assignment Agent 调用
+→ 热点运营工作区调用
 ```
 
 ## 17. Agent 运行记录
@@ -870,7 +864,7 @@ V2 不应该一开始追求全自动。
 - 查询帖子。
 - 查询相似机会。
 - 查询账号人设。
-- 查询历史任务。
+- 查询历史发布与历史候选。
 
 ### 18.2 建议型写入
 
@@ -880,7 +874,6 @@ V2 不应该一开始追求全自动。
 
 - 创建机会。
 - 创建事件。
-- 创建账号任务。
 - 生成内容 brief。
 
 ### 18.3 高风险动作
@@ -1059,8 +1052,8 @@ src/
 - Opportunity。
 - Event。
 - Evidence。
-- Assignment。
-- ContentTask。
+- OperationContext。
+- ContentDraft。
 - AgentRun。
 - Tool Registry。
 - Provider Registry。
@@ -1117,15 +1110,15 @@ Agent 结果
 人工判断
 ```
 
-### 阶段六：任务分发 Agent
+### 阶段六：热点运营工作区
 
-Agent 生成分发建议。
+运营在 Event 详情中打开热点运营弹窗。
 
-人工确认后创建账号任务。
+系统在同一上下文里展示账号、候选内容、发布回填和追踪状态。
 
 ### 阶段七：内容生成 Agent
 
-内容生成只基于账号任务和证据上下文。
+内容生成基于 Event / Opportunity、证据上下文、账号人设和运营补充要求。
 
 不再提前生成大量候选。
 
@@ -1168,9 +1161,6 @@ events
 evidence_items
 agent_runs
 agent_run_steps
-assignment_runs
-assignment_items
-content_tasks
 content_drafts
 published_posts
 post_metric_snapshots
@@ -1196,8 +1186,7 @@ tool_definitions
 - `events` 存事实性事件。
 - `evidence_items` 存可引用证据。
 - `agent_runs` 存 Agent 运行。
-- `assignment_items` 存分发决策。
-- `content_tasks` 存账号任务。
+- `content_drafts` 存候选内容。
 - `published_posts` 存回填发布链接。
 - `post_metric_snapshots` 存效果追踪。
 
