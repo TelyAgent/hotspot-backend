@@ -290,14 +290,17 @@ export class TopicWatchRepository {
   }
 
   async listCandidates(topicWatchId: string): Promise<TopicCandidate[]> {
-    return this.prisma.topicCandidate.findMany({
+    const candidates = (await this.prisma.topicCandidate.findMany({
       where: {
         topicWatchId,
       },
       orderBy: {
         lastSeenAt: 'desc',
       },
-    }) as unknown as Promise<TopicCandidate[]>;
+      take: 500,
+    })) as unknown as TopicCandidate[];
+
+    return dedupeCandidates(candidates);
   }
 
   async listDecisions(topicWatchId: string): Promise<TopicWatchDecision[]> {
@@ -371,6 +374,107 @@ export class TopicWatchRepository {
     }) as unknown as Promise<TopicCandidate>;
   }
 
+  async upsertCandidateByClusterKey(
+    input: CreateTopicCandidateInput & { clusterKey?: string },
+  ): Promise<TopicCandidate> {
+    const clusterKey =
+      input.clusterKey ?? getJsonString(input.clustering, 'clusterKey');
+    const existingByClusterKey = clusterKey
+      ? await this.prisma.topicCandidate.findFirst({
+          where: {
+            topicWatchId: input.topicWatchId,
+            clustering: {
+              path: ['clusterKey'],
+              equals: clusterKey,
+            },
+          },
+          orderBy: {
+            lastSeenAt: 'desc',
+          },
+        })
+      : null;
+    const existing =
+      existingByClusterKey ??
+      (await this.prisma.topicCandidate.findFirst({
+        where: {
+          topicWatchId: input.topicWatchId,
+          title: input.title,
+        },
+        orderBy: {
+          lastSeenAt: 'desc',
+        },
+      }));
+
+    if (!existing) {
+      return this.createCandidate(input);
+    }
+
+    return this.prisma.topicCandidate.update({
+      where: {
+        id: existing.id,
+      },
+      data: {
+        title: input.title,
+        summary: input.summary,
+        keywords: input.keywords,
+        entities: input.entities,
+        firstSeenAt: minDate(existing.firstSeenAt, input.firstSeenAt),
+        lastSeenAt: maxDate(existing.lastSeenAt, input.lastSeenAt),
+        signalCount: input.signalCount,
+        postCount: input.postCount,
+        accountCount: input.accountCount,
+        sourceTypes: input.sourceTypes,
+        representativeSignalIds: input.representativeSignalIds,
+        evidenceRefs: input.evidenceRefs,
+        metrics: input.metrics as Prisma.InputJsonValue,
+        clustering: {
+          ...toJsonObject(input.clustering),
+          clusterKey,
+        } as Prisma.InputJsonValue,
+        status: existing.status,
+      },
+    }) as unknown as Promise<TopicCandidate>;
+  }
+
+  async findCandidateById(input: {
+    topicWatchId: string;
+    candidateId: string;
+  }): Promise<TopicCandidate | null> {
+    return this.prisma.topicCandidate.findFirst({
+      where: {
+        id: input.candidateId,
+        topicWatchId: input.topicWatchId,
+      },
+    }) as unknown as Promise<TopicCandidate | null>;
+  }
+
+  async listSignalsByIds(signalIds: string[]): Promise<Signal[]> {
+    if (signalIds.length === 0) return [];
+
+    return this.prisma.signal.findMany({
+      where: {
+        id: {
+          in: signalIds,
+        },
+      },
+    }) as unknown as Promise<Signal[]>;
+  }
+
+  async listEvidenceBySignalIds(signalIds: string[]) {
+    if (signalIds.length === 0) return [];
+
+    return this.prisma.evidenceItem.findMany({
+      where: {
+        signalId: {
+          in: signalIds,
+        },
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+    });
+  }
+
   async createDecision(
     input: CreateTopicWatchDecisionInput,
   ): Promise<TopicWatchDecision> {
@@ -394,4 +498,46 @@ export class TopicWatchRepository {
       },
     }) as unknown as Promise<TopicWatchDecision>;
   }
+}
+
+function dedupeCandidates(candidates: TopicCandidate[]) {
+  const seen = new Set<string>();
+  const deduped: TopicCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const key =
+      getJsonString(candidate.clustering, 'clusterKey') ??
+      normalizeCandidateTitle(candidate.title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(candidate);
+  }
+
+  return deduped;
+}
+
+function getJsonString(value: unknown, key: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const item = (value as Record<string, unknown>)[key];
+  return typeof item === 'string' && item.trim() ? item.trim() : undefined;
+}
+
+function toJsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function normalizeCandidateTitle(title: string) {
+  return title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/gu, ' ').trim();
+}
+
+function minDate(left: Date, right: Date) {
+  return left.getTime() <= right.getTime() ? left : right;
+}
+
+function maxDate(left: Date, right: Date) {
+  return left.getTime() >= right.getTime() ? left : right;
 }

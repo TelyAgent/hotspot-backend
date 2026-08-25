@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ProjectConfigService } from '../../project-config/project-config.service';
+import { CollectionRunRepository } from '../runner/collection-run.repository';
 import { CollectionRunnerService } from '../runner/collection-runner.service';
 
 const DEFAULT_REGION_WOEIDS = {
@@ -24,6 +25,7 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
     private readonly configService: ConfigService,
     private readonly runner: CollectionRunnerService,
     private readonly projectConfigService: ProjectConfigService,
+    private readonly collectionRunRepository: CollectionRunRepository,
   ) {}
 
   onModuleInit(): void {
@@ -59,6 +61,15 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
     const intervalMs = collectionConfig.collectionIntervalMs;
 
     if (this.lastStartedAt && now - this.lastStartedAt < intervalMs) {
+      return;
+    }
+
+    const latestRun = await this.collectionRunRepository.findLatestByPlugin({
+      pluginId: 'x-trends',
+      statuses: ['running', 'succeeded'],
+    });
+    if (latestRun && now - latestRun.startedAt.getTime() < intervalMs) {
+      this.lastStartedAt = latestRun.startedAt.getTime();
       return;
     }
 

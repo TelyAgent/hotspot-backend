@@ -15,13 +15,16 @@ export class TopicAggregationService {
     const groups = this.groupSignals(input.signals);
     const candidates: TopicCandidate[] = [];
 
-    for (const signals of groups.values()) {
+    for (const [clusterKey, signals] of groups.entries()) {
       const candidateInput = this.createCandidateInput(
         input.topicWatchId,
         signals,
+        clusterKey,
       );
       const candidate =
-        await this.topicWatchRepository.createCandidate(candidateInput);
+        await this.topicWatchRepository.upsertCandidateByClusterKey(
+          { ...candidateInput, clusterKey },
+        );
       candidates.push(candidate);
     }
 
@@ -57,6 +60,7 @@ export class TopicAggregationService {
   private createCandidateInput(
     topicWatchId: string,
     signals: Signal[],
+    clusterKey: string,
   ): CreateTopicCandidateInput {
     const sortedSignals = [...signals].sort(
       (a, b) => a.observedAt.getTime() - b.observedAt.getTime(),
@@ -88,6 +92,7 @@ export class TopicAggregationService {
       },
       clustering: {
         method: 'hybrid',
+        clusterKey,
         confidence: signals.length > 1 ? 'medium' : 'low',
       },
       status: 'new',
@@ -138,12 +143,8 @@ export class TopicAggregationService {
     );
 
     return {
-      b3h: postSignals.filter(
-        (signal) => signal.observedAt.getTime() >= b3hWindowStart,
-      ).length,
-      b24h: postSignals.filter(
-        (signal) => signal.observedAt.getTime() >= b24hWindowStart,
-      ).length,
+      b3h: countUniqueAuthorsInWindow(postSignals, b3hWindowStart),
+      b24h: countUniqueAuthorsInWindow(postSignals, b24hWindowStart),
       tmax: maxScore.score,
       tmaxSignalId: maxScore.signal?.id ?? null,
       tmaxTop5Percent: null,
@@ -155,6 +156,37 @@ export class TopicAggregationService {
 
 function isPostSignal(signalType: string) {
   return signalType === 'post' || signalType.endsWith('_post');
+}
+
+function countUniqueAuthorsInWindow(signals: Signal[], windowStartAt: number) {
+  const authors = new Set<string>();
+
+  for (const signal of signals) {
+    if (signal.observedAt.getTime() < windowStartAt) continue;
+    const author = getSignalAuthor(signal);
+    if (author) authors.add(author);
+  }
+
+  return authors.size;
+}
+
+function getSignalAuthor(signal: Signal) {
+  const metadata = signal.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const authorHandle = metadata.authorHandle;
+  if (typeof authorHandle === 'string' && authorHandle.trim()) {
+    return authorHandle.trim().toLowerCase();
+  }
+
+  const authorHandles = metadata.authorHandles;
+  if (Array.isArray(authorHandles) && typeof authorHandles[0] === 'string') {
+    return authorHandles[0].trim().toLowerCase();
+  }
+
+  return null;
 }
 
 function calculatePostTrafficScore(signal: Signal) {

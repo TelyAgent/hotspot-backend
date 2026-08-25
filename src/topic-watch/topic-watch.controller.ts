@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { JsonObject } from '../common/types/json.type';
+import { TopicCandidateDetailService } from './candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from './decision/topic-watch-agent.service';
 import { TopicWatchRepository } from './topic-watch.repository';
@@ -10,6 +11,7 @@ export class TopicWatchController {
     private readonly topicWatchRepository: TopicWatchRepository,
     private readonly topicWatchAgentService: TopicWatchAgentService,
     private readonly topicWatchCollectionService: TopicWatchCollectionService,
+    private readonly topicCandidateDetailService: TopicCandidateDetailService,
   ) {}
 
   @Get()
@@ -133,6 +135,17 @@ export class TopicWatchController {
   @Get(':id/candidates')
   listCandidates(@Param('id') id: string) {
     return this.topicWatchRepository.listCandidates(id);
+  }
+
+  @Get(':id/candidates/:candidateId/posts')
+  listCandidatePosts(
+    @Param('id') id: string,
+    @Param('candidateId') candidateId: string,
+  ) {
+    return this.topicCandidateDetailService.listCandidatePosts({
+      topicWatchId: id,
+      candidateId,
+    });
   }
 
   @Post(':id/evaluate')

@@ -70,4 +70,25 @@ export class CollectionRunRepository {
       },
     }) as Promise<CollectionRun[]>;
   }
+
+  async findLatestByPlugin(input: {
+    pluginId: string;
+    statuses?: string[];
+  }): Promise<CollectionRun | null> {
+    return this.prisma.collectionRun.findFirst({
+      where: {
+        pluginId: input.pluginId,
+        ...(input.statuses && input.statuses.length > 0
+          ? {
+              status: {
+                in: input.statuses,
+              },
+            }
+          : {}),
+      },
+      orderBy: {
+        startedAt: 'desc',
+      },
+    }) as Promise<CollectionRun | null>;
+  }
 }
