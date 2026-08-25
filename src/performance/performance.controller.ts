@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { JsonObject } from '../common/types/json.type';
 import { InsightsService } from './insights/insights.service';
+import { OverviewService } from './overview/overview.service';
 import { PostMetricSnapshotRepository } from './tracking/post-metric-snapshot.repository';
 import { PublishedPostRepository } from './tracking/published-post.repository';
 import { PerformanceTrackingService } from './tracking/performance-tracking.service';
@@ -12,7 +13,13 @@ export class PerformanceController {
     private readonly publishedPostRepository: PublishedPostRepository,
     private readonly metricSnapshotRepository: PostMetricSnapshotRepository,
     private readonly insightsService: InsightsService,
+    private readonly overviewService: OverviewService,
   ) {}
+
+  @Get('overview')
+  getOverview(@Query('range') range?: string) {
+    return this.overviewService.getOverview({ range });
+  }
 
   @Get('insights')
   getInsights(@Query('range') range?: string) {
