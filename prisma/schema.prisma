@@ -424,12 +424,33 @@ model TopicWatch {
   updatedAt        DateTime @updatedAt
 
   monitoringPlans TopicMonitoringPlan[]
+  accounts        TopicWatchAccount[]
   candidates      TopicCandidate[]
   aggregationRuns TopicAggregationRun[]
   decisions       TopicWatchDecision[]
 
   @@index([status])
   @@map("topic_watches")
+}
+
+model TopicWatchAccount {
+  id                  String   @id @default(cuid())
+  topicWatchId        String
+  handle              String
+  primaryRole         String
+  singleTriggerPolicy String
+  authorityScope      String
+  status              String
+  sortOrder           Int
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  topicWatch TopicWatch @relation(fields: [topicWatchId], references: [id], onDelete: Cascade)
+
+  @@unique([topicWatchId, handle])
+  @@index([topicWatchId, status])
+  @@index([singleTriggerPolicy])
+  @@map("topic_watch_accounts")
 }
 
 model TopicMonitoringPlan {

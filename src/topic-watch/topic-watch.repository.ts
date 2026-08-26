@@ -9,8 +9,10 @@ import {
   CreateTopicWatchInput,
   TopicCandidate,
   TopicWatch,
+  TopicWatchAccount,
   TopicWatchDecision,
   TopicMonitoringPlan,
+  UpdateTopicWatchAccountInput,
 } from './topic-watch.types';
 
 export interface UpdateTopicWatchInput {
@@ -58,6 +60,25 @@ export class TopicWatchRepository {
   async findTopicWatchById(id: string): Promise<TopicWatch | null> {
     return this.prisma.topicWatch.findUnique({
       where: { id },
+      include: {
+        accounts: {
+          where: {
+            status: 'active',
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
+        monitoringPlans: {
+          where: {
+            status: 'active',
+          },
+          orderBy: {
+            version: 'desc',
+          },
+          take: 1,
+        },
+      },
     }) as unknown as Promise<TopicWatch | null>;
   }
 
@@ -96,6 +117,14 @@ export class TopicWatchRepository {
   async listTopicWatches(): Promise<TopicWatch[]> {
     return this.prisma.topicWatch.findMany({
       include: {
+        accounts: {
+          where: {
+            status: 'active',
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
         monitoringPlans: {
           where: {
             status: 'active',
@@ -121,6 +150,62 @@ export class TopicWatchRepository {
         createdAt: 'desc',
       },
     }) as unknown as Promise<TopicWatch[]>;
+  }
+
+  async updateTopicWatchAccounts(
+    topicWatchId: string,
+    accounts: UpdateTopicWatchAccountInput[],
+  ): Promise<TopicWatchAccount[]> {
+    const activeHandles = accounts.map((account) => normalizeHandle(account.handle));
+
+    await this.prisma.topicWatchAccount.updateMany({
+      where: {
+        topicWatchId,
+        handle: {
+          notIn: activeHandles,
+        },
+      },
+      data: {
+        status: 'archived',
+      },
+    });
+
+    for (const account of accounts) {
+      await this.prisma.topicWatchAccount.upsert({
+        where: {
+          topicWatchId_handle: {
+            topicWatchId,
+            handle: normalizeHandle(account.handle),
+          },
+        },
+        update: {
+          primaryRole: account.primaryRole,
+          singleTriggerPolicy: account.singleTriggerPolicy,
+          authorityScope: account.authorityScope,
+          sortOrder: account.sortOrder,
+          status: account.status ?? 'active',
+        },
+        create: {
+          topicWatchId,
+          handle: normalizeHandle(account.handle),
+          primaryRole: account.primaryRole,
+          singleTriggerPolicy: account.singleTriggerPolicy,
+          authorityScope: account.authorityScope,
+          sortOrder: account.sortOrder,
+          status: account.status ?? 'active',
+        },
+      });
+    }
+
+    return this.prisma.topicWatchAccount.findMany({
+      where: {
+        topicWatchId,
+        status: 'active',
+      },
+      orderBy: {
+        sortOrder: 'asc',
+      },
+    }) as unknown as Promise<TopicWatchAccount[]>;
   }
 
   async findActiveMonitoringPlan(
@@ -531,6 +616,10 @@ export class TopicWatchRepository {
       },
     }) as unknown as Promise<TopicWatchDecision>;
   }
+}
+
+function normalizeHandle(handle: string) {
+  return handle.trim().replace(/^@/, '');
 }
 
 function dedupeCandidates(candidates: TopicCandidate[]) {

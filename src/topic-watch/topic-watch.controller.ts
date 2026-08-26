@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { JsonObject } from '../common/types/json.type';
+import { TopicWatchSingleTriggerPolicy } from './topic-watch.types';
 import { TopicCandidateDetailService } from './candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from './decision/topic-watch-agent.service';
@@ -113,6 +114,18 @@ export class TopicWatchController {
     });
   }
 
+  @Patch(':id/accounts')
+  updateAccounts(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    const accounts = Array.isArray(body.accounts) ? body.accounts : [];
+
+    return this.topicWatchRepository.updateTopicWatchAccounts(
+      id,
+      accounts
+        .map((item, index) => normalizeAccountInput(item, index))
+        .filter((item): item is NonNullable<ReturnType<typeof normalizeAccountInput>> => item !== null),
+    );
+  }
+
   @Get(':id/monitoring-plans')
   listMonitoringPlans(@Param('id') id: string) {
     return this.topicWatchRepository.listMonitoringPlans(id);
@@ -194,4 +207,36 @@ export class TopicWatchController {
       status: body.status ? String(body.status) : 'draft',
     });
   }
+}
+
+function normalizeAccountInput(value: unknown, index: number) {
+  if (!isRecord(value)) return null;
+  const handle = getString(value.handle);
+  if (!handle) return null;
+  const singleTriggerPolicy = getPolicy(value.singleTriggerPolicy);
+
+  return {
+    handle,
+    primaryRole: getString(value.primaryRole) ?? '专业媒体、快速雷达、数据、分析、预测和观点账号',
+    singleTriggerPolicy,
+    authorityScope: getString(value.authorityScope) ?? '按账号公开信息与帖子内容判断',
+    status: getString(value.status) === 'paused' ? 'paused' as const : 'active' as const,
+    sortOrder: getNumber(value.sortOrder) ?? index + 1,
+  };
+}
+
+function getPolicy(value: unknown): TopicWatchSingleTriggerPolicy {
+  return value === 'S1' || value === 'S2' || value === 'C' ? value : 'C';
+}
+
+function getString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function getNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

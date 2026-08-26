@@ -2,6 +2,7 @@ import { JsonObject } from '../common/types/json.type';
 import { Signal } from '../signal/signal/signal.types';
 
 export type TopicWatchStatus = 'active' | 'paused' | 'archived';
+export type TopicWatchSingleTriggerPolicy = 'S1' | 'S2' | 'C';
 export type TopicCandidateStatus =
   | 'new'
   | 'watching'
@@ -22,8 +23,31 @@ export interface TopicWatch {
   exclusionPolicy?: string | null;
   status: TopicWatchStatus;
   ownerId?: string | null;
+  accounts?: TopicWatchAccount[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface TopicWatchAccount {
+  id: string;
+  topicWatchId: string;
+  handle: string;
+  primaryRole: string;
+  singleTriggerPolicy: TopicWatchSingleTriggerPolicy;
+  authorityScope: string;
+  status: TopicWatchStatus;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UpdateTopicWatchAccountInput {
+  handle: string;
+  primaryRole: string;
+  singleTriggerPolicy: TopicWatchSingleTriggerPolicy;
+  authorityScope: string;
+  status?: TopicWatchStatus;
+  sortOrder: number;
 }
 
 export interface CreateTopicWatchInput {
