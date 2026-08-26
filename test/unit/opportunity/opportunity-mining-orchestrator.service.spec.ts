@@ -296,4 +296,132 @@ describe('OpportunityMiningOrchestratorService', () => {
       }),
     );
   });
+
+  it('deduplicates event evidence references that point to the same source item', async () => {
+    const evidenceService = {
+      load: jest.fn(() =>
+        Promise.resolve({
+          signals: [
+            {
+              id: 'sig_1',
+              signalType: 'x_post',
+              observedAt: new Date('2026-08-26T08:00:00.000Z'),
+            },
+          ],
+          evidence: [
+            {
+              id: 'evi_1',
+              signalId: 'sig_1',
+              sourceType: 'x_account_post',
+              sourceItemId: '2092501080303145068',
+              claim: 'Reuters 发布了帖子。',
+              url: 'https://x.com/Reuters/status/2092501080303145068',
+              confidence: 'high',
+              observedAt: new Date('2026-08-26T08:00:00.000Z'),
+              createdAt: new Date('2026-08-26T08:00:00.000Z'),
+              updatedAt: new Date('2026-08-26T08:00:00.000Z'),
+            },
+            {
+              id: 'evi_2',
+              signalId: 'sig_2',
+              sourceType: 'x_account_post',
+              sourceItemId: '2092501080303145068',
+              claim: 'Reuters 发布了同一条帖子。',
+              url: 'https://x.com/Reuters/status/2092501080303145068',
+              confidence: 'high',
+              observedAt: new Date('2026-08-26T07:00:00.000Z'),
+              createdAt: new Date('2026-08-26T07:00:00.000Z'),
+              updatedAt: new Date('2026-08-26T07:00:00.000Z'),
+            },
+          ],
+          missingData: [],
+        }),
+      ),
+    } as unknown as OpportunityMiningEvidenceService;
+    const rulePackLoader = {
+      loadActiveRulePack: jest.fn(() =>
+        Promise.resolve({
+          id: 'rule_pack_1',
+          version: 1,
+          status: 'active',
+          basePath: '/tmp/rules',
+          documents: [],
+          routes: [],
+        }),
+      ),
+      selectDocuments: jest.fn(() => []),
+    } as unknown as OpportunityRulePackLoaderService;
+    const miningAgentService = {
+      evaluateGoalWithRun: jest.fn(() =>
+        Promise.resolve({
+          agentRunId: 'agent_run_1',
+          decision: {
+            decision: 'create_event',
+            title: 'Reuters 热点事件',
+            opportunityType: 'news_event',
+            summary: 'Reuters 帖子形成热点事件。',
+            whyNow: '同一帖子被多次快照观察到。',
+            whyItMatters: '值得跟进。',
+            productAngles: [],
+            contentWindow: '24 小时',
+            confidence: 'high',
+            evidenceRefs: ['evi_1', 'evi_2'],
+            missingData: [],
+            riskNotes: [],
+          },
+        }),
+      ),
+    } as unknown as OpportunityMiningAgentService;
+    const opportunityRepository = {
+      createOpportunity: jest.fn(),
+      createEvent: jest.fn((input) => Promise.resolve({ id: 'evt_1', ...input })),
+      createMiningSignalRun: jest.fn(() => Promise.resolve({})),
+    } as unknown as OpportunityRepository;
+    const eventLabelingService = {
+      buildLabels: jest.fn(() => Promise.resolve([])),
+    } as unknown as EventLabelingService;
+    const eventMergeRepository = {
+      createSourceContext: jest.fn(() =>
+        Promise.resolve({
+          id: 'ctx_1',
+          mainEventId: 'evt_1',
+          sourceType: 'x_account_post',
+          triggerType: 'agent_decision',
+        }),
+      ),
+    } as unknown as EventMergeRepository;
+    const eventMergeOrchestrator = {
+      processIncomingContext: jest.fn(() => Promise.resolve({ action: 'no_candidate' })),
+    } as unknown as EventMergeOrchestratorService;
+    const service = new OpportunityMiningOrchestratorService(
+      evidenceService,
+      rulePackLoader,
+      miningAgentService,
+      new OpportunityMiningDecisionValidator(),
+      opportunityRepository,
+      eventLabelingService,
+      eventMergeRepository,
+      eventMergeOrchestrator,
+    );
+
+    await service.run({
+      goal: service.createGoal({
+        instruction: '判断是否形成事件。',
+        seedSignalIds: ['sig_1'],
+        writeMode: 'allow_create',
+        type: 'form_event',
+      }),
+    });
+
+    expect(opportunityRepository.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evidenceRefs: ['evi_1'],
+      }),
+    );
+    expect(eventMergeRepository.createSourceContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evidenceRefs: ['evi_1'],
+      }),
+    );
+  });
 });

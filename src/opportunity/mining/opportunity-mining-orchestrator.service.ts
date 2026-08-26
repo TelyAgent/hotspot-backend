@@ -119,11 +119,13 @@ export class OpportunityMiningOrchestratorService {
 
   private normalizeEvidenceRefs(
     decision: OpportunityMiningDecision,
-    evidence: Array<{ id: string }>,
+    evidence: EvidenceItem[],
   ): OpportunityMiningDecision {
-    const validEvidenceIds = new Set(evidence.map((item) => item.id));
-    const normalizedRefs = this.uniqueStrings(decision.evidenceRefs).filter((ref) =>
-      validEvidenceIds.has(ref),
+    const evidenceById = new Map(evidence.map((item) => [item.id, item]));
+    const normalizedRefs = this.deduplicateEvidenceRefsBySourceItem(
+      this.uniqueStrings(decision.evidenceRefs)
+        .map((ref) => evidenceById.get(ref))
+        .filter((item): item is EvidenceItem => Boolean(item)),
     );
 
     if (normalizedRefs.length > 0) {
@@ -133,7 +135,7 @@ export class OpportunityMiningOrchestratorService {
       };
     }
 
-    const fallbackRefs = evidence.map((item) => item.id);
+    const fallbackRefs = this.deduplicateEvidenceRefsBySourceItem(evidence);
     if (fallbackRefs.length === 0) {
       return decision;
     }
@@ -150,6 +152,37 @@ export class OpportunityMiningOrchestratorService {
 
   private uniqueStrings(values: string[]): string[] {
     return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+  }
+
+  private deduplicateEvidenceRefsBySourceItem(evidence: EvidenceItem[]): string[] {
+    const refs: string[] = [];
+    const seen = new Set<string>();
+
+    for (const item of evidence) {
+      const key = this.evidenceSourceIdentityKey(item);
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      refs.push(item.id);
+    }
+
+    return refs;
+  }
+
+  private evidenceSourceIdentityKey(item: EvidenceItem): string {
+    const sourceItemId = this.optionalString(item.sourceItemId);
+    if (sourceItemId) {
+      return `${item.sourceType}:source-item:${sourceItemId}`;
+    }
+
+    const url = this.optionalString(item.url);
+    if (url) {
+      return `${item.sourceType}:url:${url}`;
+    }
+
+    return `${item.sourceType}:evidence:${item.id}`;
   }
 
   createGoal(input: {

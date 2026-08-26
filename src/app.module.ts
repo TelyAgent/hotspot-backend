@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AgentModule } from './agent/agent.module';
+import { AssistantModule } from './assistant/assistant.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DataSourceModule } from './data-source/data-source.module';
@@ -26,6 +27,7 @@ import { YoutubeModule } from './youtube/youtube.module';
     DataSourceModule,
     ProjectConfigModule,
     AgentModule,
+    AssistantModule,
     FutureEventModule,
     TopicWatchModule,
     OpportunityModule,
