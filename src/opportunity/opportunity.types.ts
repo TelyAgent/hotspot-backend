@@ -29,10 +29,30 @@ export interface Event {
   evidenceRefs: string[];
   missingData: string[];
   riskNotes: string[];
+  labels?: EventLabel[] | null;
   confidence: OpportunityConfidence;
   status: 'suggested' | 'confirmed' | 'ignored' | 'archived';
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface EventListResult {
+  items: Event[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type EventLabelCategory = 'source' | 'trigger' | 'aggregation';
+
+export interface EventLabel {
+  code: string;
+  name: string;
+  category: EventLabelCategory;
+  sourcePath?: string | null;
+  evidenceRefs: string[];
+  reason: string;
+  confidence: OpportunityConfidence;
 }
 
 export interface OpportunityRulePackRecord {
@@ -128,6 +148,7 @@ export interface CreateEventInput {
   evidenceRefs: string[];
   missingData: string[];
   riskNotes: string[];
+  labels?: EventLabel[];
   confidence: OpportunityConfidence;
   status?: Event['status'];
 }

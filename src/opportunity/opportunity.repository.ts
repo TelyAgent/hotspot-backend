@@ -7,6 +7,7 @@ import {
   CreateOpportunityMiningSignalRunInput,
   CreateOpportunityRulePackInput,
   Event,
+  EventListResult,
   Opportunity,
   OpportunityMiningSignalRun,
   OpportunityMiningSignalRunWithSignal,
@@ -111,6 +112,7 @@ export class OpportunityRepository {
         evidenceRefs: input.evidenceRefs,
         missingData: input.missingData,
         riskNotes: input.riskNotes,
+        labels: (input.labels ?? []) as unknown as Prisma.InputJsonValue,
         confidence: input.confidence,
         status: input.status ?? 'suggested',
       },
@@ -119,19 +121,34 @@ export class OpportunityRepository {
 
   async listEvents(input: {
     status?: string;
-    take?: number;
-  } = {}): Promise<Event[]> {
-    return this.prisma.event.findMany({
-      where: input.status
-        ? {
-            status: input.status,
-          }
-        : undefined,
-      take: input.take ?? 50,
-      orderBy: {
-        createdAt: 'desc',
-      },
-    }) as unknown as Promise<Event[]>;
+    label?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}): Promise<EventListResult> {
+    const page = Math.max(input.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(input.pageSize ?? 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+    const where = buildEventListWhere(input);
+    const countRows = await this.prisma.$queryRaw<{ total: number }[]>`
+      SELECT COUNT(*)::int AS total
+      FROM "events"
+      ${where}
+    `;
+    const items = await this.prisma.$queryRaw<Event[]>`
+      SELECT *
+      FROM "events"
+      ${where}
+      ORDER BY "createdAt" DESC
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `;
+
+    return {
+      items: items as unknown as Event[],
+      total: countRows[0]?.total ?? 0,
+      page,
+      pageSize,
+    };
   }
 
   async findEventById(id: string): Promise<Event | null> {
@@ -296,4 +313,31 @@ export class OpportunityRepository {
       },
     }) as unknown as Promise<OpportunityMiningSignalRunWithSignal[]>;
   }
+}
+
+function buildEventListWhere(input: { status?: string; label?: string }) {
+  const filters: Prisma.Sql[] = [];
+  const status = input.status?.trim();
+  const label = input.label?.trim();
+
+  if (status) {
+    filters.push(Prisma.sql`"status" = ${status}`);
+  }
+
+  if (label) {
+    filters.push(Prisma.sql`
+      EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(COALESCE("labels"::jsonb, '[]'::jsonb)) AS event_label
+        WHERE event_label->>'name' = ${label}
+           OR event_label->>'code' = ${label}
+      )
+    `);
+  }
+
+  if (!filters.length) {
+    return Prisma.empty;
+  }
+
+  return Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`;
 }

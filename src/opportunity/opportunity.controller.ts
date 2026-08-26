@@ -1,5 +1,9 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { parseTake } from '../common/utils/request.util';
+import {
+  parsePage,
+  parsePageSize,
+  parseTake,
+} from '../common/utils/request.util';
 import { JsonObject } from '../common/types/json.type';
 import { OpportunityMiningOrchestratorService } from './mining/opportunity-mining-orchestrator.service';
 import { OpportunityMiningSchedulerService } from './mining/opportunity-mining-scheduler.service';
@@ -24,10 +28,17 @@ export class OpportunityController {
   }
 
   @Get('events')
-  listEvents(@Query('status') status?: string, @Query('take') take?: string) {
+  listEvents(
+    @Query('status') status?: string,
+    @Query('label') label?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
     return this.opportunityRepository.listEvents({
       status,
-      take: parseTake(take),
+      label,
+      page: parsePage(page),
+      pageSize: parsePageSize(pageSize),
     });
   }
 

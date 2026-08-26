@@ -25,7 +25,26 @@ describe('Opportunity API', () => {
           },
         ] as never),
       ),
-      listEvents: jest.fn(() => Promise.resolve([])),
+      listEvents: jest.fn(() =>
+        Promise.resolve({
+          items: [
+            {
+              id: 'event_1',
+              title: 'Top 5 事件',
+              labels: [
+                {
+                  code: 'x_trend_top_5',
+                  name: 'Top 5',
+                  category: 'trigger',
+                },
+              ],
+            },
+          ],
+          total: 1,
+          page: 2,
+          pageSize: 10,
+        } as never),
+      ),
       listMiningSignalRuns: jest.fn(() =>
         Promise.resolve([
           {
@@ -189,6 +208,30 @@ describe('Opportunity API', () => {
         title: 'AI 产品机会',
       }),
     ]);
+  });
+
+  it('lists events with pagination and label filter', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/opportunities/events?page=2&pageSize=10&label=Top%205')
+      .expect(200);
+
+    expect(repository.listEvents).toHaveBeenCalledWith({
+      status: undefined,
+      label: 'Top 5',
+      page: 2,
+      pageSize: 10,
+    });
+    expect(response.body).toEqual({
+      items: [
+        expect.objectContaining({
+          id: 'event_1',
+          title: 'Top 5 事件',
+        }),
+      ],
+      total: 1,
+      page: 2,
+      pageSize: 10,
+    });
   });
 
   it('mines an opportunity decision through the orchestrator', async () => {

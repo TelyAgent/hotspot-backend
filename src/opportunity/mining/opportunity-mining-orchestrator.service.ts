@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { JsonObject } from '../../common/types/json.type';
+import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { OpportunityRulePackLoaderService } from '../rule-pack/opportunity-rule-pack-loader.service';
 import { OpportunityMiningDecision } from '../opportunity.types';
 import { OpportunityRepository } from '../opportunity.repository';
 import { OpportunityMiningAgentService } from './opportunity-mining-agent.service';
 import { OpportunityMiningDecisionValidator } from './opportunity-mining-decision.validator';
 import { OpportunityMiningEvidenceService } from './opportunity-mining-evidence.service';
+import { EventLabelingService } from '../labeling/event-labeling.service';
 import {
   OpportunityMiningGoal,
   OpportunityMiningRunResult,
@@ -20,6 +22,7 @@ export class OpportunityMiningOrchestratorService {
     private readonly miningAgentService: OpportunityMiningAgentService,
     private readonly decisionValidator: OpportunityMiningDecisionValidator,
     private readonly opportunityRepository: OpportunityRepository,
+    private readonly eventLabelingService: EventLabelingService,
   ) {}
 
   async run(input: {
@@ -85,7 +88,7 @@ export class OpportunityMiningOrchestratorService {
     this.decisionValidator.validate(decision);
 
     if (goal.constraints.writeMode === 'allow_create') {
-      const result = await this.persistDecision(decision, agentRunId);
+      const result = await this.persistDecision(decision, memory.evidence, agentRunId);
       await this.recordMiningRun({
         seedSignalId,
         idempotencyKey,
@@ -170,9 +173,13 @@ export class OpportunityMiningOrchestratorService {
 
   private async persistDecision(
     decision: OpportunityMiningDecision,
+    evidence: EvidenceItem[],
     agentRunId?: string,
   ): Promise<OpportunityMiningRunResult> {
     if (decision.decision === 'create_event') {
+      const labels = await this.eventLabelingService.buildLabels({
+        evidence: evidence.filter((item) => decision.evidenceRefs.includes(item.id)),
+      });
       const event = await this.opportunityRepository.createEvent({
         title: decision.title,
         eventType: decision.opportunityType,
@@ -180,6 +187,7 @@ export class OpportunityMiningOrchestratorService {
         evidenceRefs: decision.evidenceRefs,
         missingData: decision.missingData,
         riskNotes: decision.riskNotes,
+        labels,
         confidence: decision.confidence,
         status: 'suggested',
       });

@@ -8,6 +8,7 @@ import { OpportunityMiningSchedulerService } from './mining/opportunity-mining-s
 import { OpportunityMiningSignalSelectorService } from './mining/opportunity-mining-signal-selector.service';
 import { OpportunityController } from './opportunity.controller';
 import { OpportunityRepository } from './opportunity.repository';
+import { EventLabelingService } from './labeling/event-labeling.service';
 import { OpportunityRulePackGovernanceService } from './rule-pack/opportunity-rule-pack-governance.service';
 import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-pack-loader.service';
 
@@ -22,6 +23,7 @@ import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-p
     OpportunityMiningOrchestratorService,
     OpportunityMiningSchedulerService,
     OpportunityMiningSignalSelectorService,
+    EventLabelingService,
     OpportunityRulePackGovernanceService,
     OpportunityRulePackLoaderService,
   ],
@@ -30,6 +32,7 @@ import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-p
     OpportunityMiningAgentService,
     OpportunityMiningOrchestratorService,
     OpportunityMiningSignalSelectorService,
+    EventLabelingService,
     OpportunityRulePackGovernanceService,
     OpportunityRulePackLoaderService,
   ],
