@@ -22,11 +22,6 @@ export class YoutubeService {
     });
 
     const summary = isRecord(run.outputSummary) ? run.outputSummary : {};
-    const analysisSummary =
-      run.status === 'succeeded'
-        ? await this.analysisService.analyzeMissing({ limit: 50 })
-        : { analyzed: 0, skipped: 0, failed: 0 };
-
     return {
       id: run.id,
       runDate: run.startedAt.toISOString(),
@@ -35,7 +30,7 @@ export class YoutubeService {
       keywordCount: getNumber(summary.keywordCount, 0),
       newVideoCount: getNumber(summary.signalCount, run.rawItemCount),
       historicalCount: run.rawItemCount,
-      analysisSummary,
+      analysisSummary: { analyzed: 0, skipped: 0, failed: 0 },
       errorMessage: run.errorMessage,
       startedAt: run.startedAt.toISOString(),
       finishedAt: run.finishedAt?.toISOString() ?? null,
