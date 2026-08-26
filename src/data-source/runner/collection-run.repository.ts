@@ -91,4 +91,21 @@ export class CollectionRunRepository {
       },
     }) as Promise<CollectionRun | null>;
   }
+
+  async findByJobIdPrefix(input: {
+    jobIdPrefix: string;
+    take: number;
+  }): Promise<CollectionRun[]> {
+    return this.prisma.collectionRun.findMany({
+      where: {
+        jobId: {
+          startsWith: input.jobIdPrefix,
+        },
+      },
+      take: input.take,
+      orderBy: {
+        startedAt: 'desc',
+      },
+    }) as Promise<CollectionRun[]>;
+  }
 }

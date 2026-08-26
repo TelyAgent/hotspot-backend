@@ -70,12 +70,97 @@ describe('TopicAggregationService', () => {
     expect(candidate.metrics.b3h).toBe(1);
     expect(candidate.metrics.b24h).toBe(1);
   });
+
+  it('groups posts with similar content from different accounts into one topic', async () => {
+    const repository = new InMemoryTopicCandidateRepository();
+    const service = new TopicAggregationService(repository as never);
+
+    const candidates = await service.aggregate({
+      topicWatchId: 'topic-ai-tech',
+      windowStartAt: new Date('2026-08-25T00:00:00.000Z'),
+      windowEndAt: new Date('2026-08-25T03:00:00.000Z'),
+      signals: [
+        createSignal({
+          id: 'sig_1',
+          title: 'TechCrunch：SpaceX was reportedly in talks to buy AI coding startup Cognition. https://t.co/a',
+          summary:
+            'SpaceX was reportedly in talks to buy AI coding startup Cognition.',
+          authorHandle: 'TechCrunch',
+          postId: 'post_1',
+        }),
+        createSignal({
+          id: 'sig_2',
+          title: 'verge：SpaceX is reportedly in talks to purchase AI coding startup Cognition. https://t.co/b',
+          summary:
+            'SpaceX is reportedly in talks to purchase AI coding startup Cognition.',
+          authorHandle: 'verge',
+          postId: 'post_2',
+        }),
+      ],
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].postCount).toBe(2);
+    expect(candidates[0].accountCount).toBe(2);
+    expect(candidates[0].representativeSignalIds).toEqual(['sig_1', 'sig_2']);
+  });
+
+  it('calculates Tmax as relative author performance and marks top 5 percent', async () => {
+    const repository = new InMemoryTopicCandidateRepository();
+    repository.authorSignals.set('OpenAI', [
+      createSignal({
+        id: 'hist_1',
+        title: 'OpenAI historical post 1',
+        authorHandle: 'OpenAI',
+        postId: 'hist_1',
+        metrics: { likes: 100, reposts: 0, replies: 0, quotes: 0 },
+      }),
+      createSignal({
+        id: 'hist_2',
+        title: 'OpenAI historical post 2',
+        authorHandle: 'OpenAI',
+        postId: 'hist_2',
+        metrics: { likes: 80, reposts: 0, replies: 0, quotes: 0 },
+      }),
+      createSignal({
+        id: 'hist_3',
+        title: 'OpenAI historical post 3',
+        authorHandle: 'OpenAI',
+        postId: 'hist_3',
+        metrics: { likes: 60, reposts: 0, replies: 0, quotes: 0 },
+      }),
+    ]);
+    const service = new TopicAggregationService(repository as never);
+
+    const [candidate] = await service.aggregate({
+      topicWatchId: 'topic-ai-tech',
+      windowStartAt: new Date('2026-08-25T00:00:00.000Z'),
+      windowEndAt: new Date('2026-08-25T03:00:00.000Z'),
+      signals: [
+        createSignal({
+          id: 'sig_1',
+          title: 'OpenAI announces GPT-5 pricing update',
+          authorHandle: 'OpenAI',
+          postId: 'post_1',
+          metrics: { likes: 300, reposts: 0, replies: 0, quotes: 0 },
+        }),
+      ],
+    });
+
+    expect(candidate.metrics.tmax).toBe(3.75);
+    expect(candidate.metrics.tmaxTop5Percent).toBe(true);
+  });
 });
 
 class InMemoryTopicCandidateRepository {
   readonly candidates: TopicCandidate[] = [];
+  readonly authorSignals = new Map<string, Signal[]>();
   createdCount = 0;
   updatedCount = 0;
+
+  async listRecentPostSignalsByAuthor(input: { authorHandle: string }) {
+    return this.authorSignals.get(input.authorHandle) ?? [];
+  }
 
   async upsertCandidateByClusterKey(
     input: CreateTopicCandidateInput & { clusterKey: string },
@@ -122,8 +207,10 @@ function getClusterKey(candidate: TopicCandidate) {
 function createSignal(input: {
   id: string;
   title: string;
+  summary?: string;
   authorHandle: string;
   postId: string;
+  metrics?: Signal['metrics'];
 }): Signal {
   return {
     id: input.id,
@@ -132,10 +219,10 @@ function createSignal(input: {
     platform: 'x',
     signalType: 'x_post',
     title: input.title,
-    summary: input.title,
+    summary: input.summary ?? input.title,
     observedAt: new Date('2026-08-25T02:00:00.000Z'),
     rawRefs: [`raw_${input.id}`],
-    metrics: {
+    metrics: input.metrics ?? {
       likes: 10,
       reposts: 2,
       replies: 1,

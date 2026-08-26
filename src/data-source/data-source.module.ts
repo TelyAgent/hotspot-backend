@@ -31,6 +31,6 @@ import { DataSourceSchedulerService } from './scheduler/data-source-scheduler.se
     CollectionRunnerService,
     DataSourceSchedulerService,
   ],
-  exports: [DataSourcePluginRegistry, CollectionRunnerService],
+  exports: [DataSourcePluginRegistry, CollectionRunnerService, CollectionRunRepository],
 })
 export class DataSourceModule {}

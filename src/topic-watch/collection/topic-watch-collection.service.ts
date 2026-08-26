@@ -5,6 +5,7 @@ import { CollectionRunnerService } from '../../data-source/runner/collection-run
 import { TopicAggregationService } from '../aggregation/topic-aggregation.service';
 import { TopicWatchRepository } from '../topic-watch.repository';
 import { TopicMonitoringPlan } from '../topic-watch.types';
+import { TopicWatchTriggerService } from '../trigger/topic-watch-trigger.service';
 
 export interface TopicWatchCollectionInput {
   topicWatchId?: string;
@@ -18,6 +19,7 @@ export interface TopicWatchCollectionResult {
   signalCount: number;
   evidenceCount: number;
   candidateCount: number;
+  triggeredCount: number;
   runs: Array<{
     topicWatchId: string;
     handle: string;
@@ -44,6 +46,7 @@ export class TopicWatchCollectionService {
     private readonly topicWatchRepository: TopicWatchRepository,
     private readonly collectionRunner: CollectionRunnerService,
     private readonly topicAggregationService: TopicAggregationService,
+    private readonly topicWatchTriggerService: TopicWatchTriggerService,
   ) {}
 
   async collect(
@@ -61,6 +64,7 @@ export class TopicWatchCollectionService {
       signalCount: 0,
       evidenceCount: 0,
       candidateCount: 0,
+      triggeredCount: 0,
       runs: [],
     };
 
@@ -127,6 +131,12 @@ export class TopicWatchCollectionService {
           signals,
         });
         result.candidateCount += candidates.length;
+        const triggerResult =
+          await this.topicWatchTriggerService.evaluateAndTrigger({
+            topicWatch,
+            candidates,
+          });
+        result.triggeredCount += triggerResult.triggeredCount;
       }
     }
 

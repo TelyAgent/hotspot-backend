@@ -1,5 +1,7 @@
+import { TopicCandidateDetailService } from '../../../src/topic-watch/candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from '../../../src/topic-watch/collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from '../../../src/topic-watch/decision/topic-watch-agent.service';
+import { TopicWatchPipelineStatusService } from '../../../src/topic-watch/status/topic-watch-pipeline-status.service';
 import { TopicWatchController } from '../../../src/topic-watch/topic-watch.controller';
 import { TopicWatchRepository } from '../../../src/topic-watch/topic-watch.repository';
 
@@ -13,11 +15,7 @@ describe('TopicWatchController', () => {
         }),
       ),
     } as unknown as TopicWatchRepository;
-    const controller = new TopicWatchController(
-      repository,
-      {} as TopicWatchAgentService,
-      {} as TopicWatchCollectionService,
-    );
+    const controller = createTopicWatchController({ repository });
 
     await controller.update('topic_ai', {
       name: 'AI 与科技',
@@ -51,11 +49,7 @@ describe('TopicWatchController', () => {
         }),
       ),
     } as unknown as TopicWatchRepository;
-    const controller = new TopicWatchController(
-      repository,
-      {} as TopicWatchAgentService,
-      {} as TopicWatchCollectionService,
-    );
+    const controller = createTopicWatchController({ repository });
 
     await controller.updateActiveMonitoringPlan('topic_ai', {
       sources: [{ platform: 'x', sourceType: 'account', handle: 'OpenAI' }],
@@ -86,11 +80,7 @@ describe('TopicWatchController', () => {
         ]),
       ),
     } as unknown as TopicWatchRepository;
-    const controller = new TopicWatchController(
-      repository,
-      {} as TopicWatchAgentService,
-      {} as TopicWatchCollectionService,
-    );
+    const controller = createTopicWatchController({ repository });
 
     const result = await controller.listMonitoringPlans('topic_ai');
 
@@ -117,11 +107,7 @@ describe('TopicWatchController', () => {
         }),
       ),
     } as unknown as TopicWatchAgentService;
-    const controller = new TopicWatchController(
-      repository,
-      agentService,
-      {} as TopicWatchCollectionService,
-    );
+    const controller = createTopicWatchController({ repository, agentService });
 
     const result = await controller.generateMonitoringPlan('topic_ai', {
       activate: true,
@@ -146,11 +132,7 @@ describe('TopicWatchController', () => {
         }),
       ),
     } as unknown as TopicWatchRepository;
-    const controller = new TopicWatchController(
-      repository,
-      {} as TopicWatchAgentService,
-      {} as TopicWatchCollectionService,
-    );
+    const controller = createTopicWatchController({ repository });
 
     await controller.activateMonitoringPlan('topic_ai', 'plan_1');
 
@@ -173,16 +155,32 @@ describe('TopicWatchController', () => {
         }),
       ),
     } as unknown as TopicWatchCollectionService;
-    const controller = new TopicWatchController(
-      {} as TopicWatchRepository,
-      {} as TopicWatchAgentService,
-      collectionService,
-    );
+    const controller = createTopicWatchController({ collectionService });
 
     const result = await controller.collect();
 
     expect(collectionService.collect).toHaveBeenCalledWith({});
     expect(result.rawItemCount).toBe(3);
+  });
+
+  it('returns topic watch pipeline status', async () => {
+    const statusService = {
+      getStatus: jest.fn(() =>
+        Promise.resolve({
+          latestFetchRun: {
+            id: 'run_1',
+            status: 'succeeded',
+            itemCount: 3,
+          },
+        }),
+      ),
+    } as unknown as TopicWatchPipelineStatusService;
+    const controller = createTopicWatchController({ statusService });
+
+    const result = await controller.status();
+
+    expect(statusService.getStatus).toHaveBeenCalled();
+    expect(result.latestFetchRun?.id).toBe('run_1');
   });
 
   it('starts collection for one topic watch', async () => {
@@ -198,11 +196,7 @@ describe('TopicWatchController', () => {
         }),
       ),
     } as unknown as TopicWatchCollectionService;
-    const controller = new TopicWatchController(
-      {} as TopicWatchRepository,
-      {} as TopicWatchAgentService,
-      collectionService,
-    );
+    const controller = createTopicWatchController({ collectionService });
 
     await controller.collectOne('topic_ai');
 
@@ -211,3 +205,19 @@ describe('TopicWatchController', () => {
     });
   });
 });
+
+function createTopicWatchController(input: {
+  repository?: TopicWatchRepository;
+  agentService?: TopicWatchAgentService;
+  collectionService?: TopicWatchCollectionService;
+  detailService?: TopicCandidateDetailService;
+  statusService?: TopicWatchPipelineStatusService;
+}) {
+  return new TopicWatchController(
+    input.repository ?? ({} as TopicWatchRepository),
+    input.agentService ?? ({} as TopicWatchAgentService),
+    input.collectionService ?? ({} as TopicWatchCollectionService),
+    input.detailService ?? ({} as TopicCandidateDetailService),
+    input.statusService ?? ({} as TopicWatchPipelineStatusService),
+  );
+}

@@ -460,6 +460,25 @@ export class TopicWatchRepository {
     }) as unknown as Promise<Signal[]>;
   }
 
+  async listRecentPostSignalsByAuthor(input: {
+    authorHandle: string;
+    observedBefore: Date;
+    take: number;
+  }): Promise<Signal[]> {
+    const authorHandle = input.authorHandle.replace(/^@/, '').toLowerCase();
+
+    return this.prisma.$queryRaw<Signal[]>`
+      SELECT *
+      FROM signals
+      WHERE platform = 'x'
+        AND "signalType" = 'x_post'
+        AND "observedAt" <= ${input.observedBefore}
+        AND lower(metadata->>'authorHandle') = ${authorHandle}
+      ORDER BY "observedAt" DESC
+      LIMIT ${input.take}
+    `;
+  }
+
   async listEvidenceBySignalIds(signalIds: string[]) {
     if (signalIds.length === 0) return [];
 
@@ -473,6 +492,20 @@ export class TopicWatchRepository {
         observedAt: 'desc',
       },
     });
+  }
+
+  async updateCandidateStatus(input: {
+    candidateId: string;
+    status: TopicCandidate['status'];
+  }): Promise<TopicCandidate> {
+    return this.prisma.topicCandidate.update({
+      where: {
+        id: input.candidateId,
+      },
+      data: {
+        status: input.status,
+      },
+    }) as unknown as Promise<TopicCandidate>;
   }
 
   async createDecision(

@@ -3,6 +3,7 @@ import { JsonObject } from '../common/types/json.type';
 import { TopicCandidateDetailService } from './candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from './decision/topic-watch-agent.service';
+import { TopicWatchPipelineStatusService } from './status/topic-watch-pipeline-status.service';
 import { TopicWatchRepository } from './topic-watch.repository';
 
 @Controller('topic-watches')
@@ -12,6 +13,7 @@ export class TopicWatchController {
     private readonly topicWatchAgentService: TopicWatchAgentService,
     private readonly topicWatchCollectionService: TopicWatchCollectionService,
     private readonly topicCandidateDetailService: TopicCandidateDetailService,
+    private readonly topicWatchPipelineStatusService: TopicWatchPipelineStatusService,
   ) {}
 
   @Get()
@@ -40,6 +42,11 @@ export class TopicWatchController {
   @Post('collect')
   collect() {
     return this.topicWatchCollectionService.collect({});
+  }
+
+  @Get('status')
+  status() {
+    return this.topicWatchPipelineStatusService.getStatus();
   }
 
   @Get(':id')

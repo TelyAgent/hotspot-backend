@@ -16,7 +16,7 @@ export class TopicAggregationService {
     const candidates: TopicCandidate[] = [];
 
     for (const [clusterKey, signals] of groups.entries()) {
-      const candidateInput = this.createCandidateInput(
+      const candidateInput = await this.createCandidateInput(
         input.topicWatchId,
         signals,
         clusterKey,
@@ -32,36 +32,71 @@ export class TopicAggregationService {
   }
 
   private groupSignals(signals: Signal[]): Map<string, Signal[]> {
-    const groups = new Map<string, Signal[]>();
+    const clusters: Array<{
+      key: string;
+      tokens: Set<string>;
+      signals: Signal[];
+    }> = [];
 
     for (const signal of signals) {
-      const key = this.extractGroupKey(signal);
-      const existing = groups.get(key) ?? [];
-      existing.push(signal);
-      groups.set(key, existing);
+      const profile = this.extractContentProfile(signal);
+      const existing = clusters.find((cluster) =>
+        shouldMergeProfiles(cluster.tokens, profile.tokens),
+      );
+
+      if (existing) {
+        existing.signals.push(signal);
+        for (const token of profile.tokens) {
+          existing.tokens.add(token);
+        }
+        continue;
+      }
+
+      clusters.push({
+        key: profile.key,
+        tokens: profile.tokens,
+        signals: [signal],
+      });
     }
 
+    const groups = new Map<string, Signal[]>();
+    for (const cluster of clusters) {
+      groups.set(cluster.key, cluster.signals);
+    }
     return groups;
   }
 
-  private extractGroupKey(signal: Signal): string {
+  private extractContentProfile(signal: Signal): {
+    key: string;
+    tokens: Set<string>;
+  } {
     const metadata = signal.metadata;
 
     if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
       const entities = metadata.entities;
       if (Array.isArray(entities) && typeof entities[0] === 'string') {
-        return entities[0].toLowerCase();
+        const entityKey = entities[0].toLowerCase();
+        return {
+          key: `entity:${entityKey}`,
+          tokens: new Set([entityKey]),
+        };
       }
     }
 
-    return signal.title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/gu, ' ').trim();
+    const normalizedText = normalizeSignalText(signal);
+    const tokens = tokenizeTopicText(normalizedText);
+
+    return {
+      key: `content:${createTokenSignature(tokens) || normalizedText}`,
+      tokens,
+    };
   }
 
-  private createCandidateInput(
+  private async createCandidateInput(
     topicWatchId: string,
     signals: Signal[],
     clusterKey: string,
-  ): CreateTopicCandidateInput {
+  ): Promise<CreateTopicCandidateInput> {
     const sortedSignals = [...signals].sort(
       (a, b) => a.observedAt.getTime() - b.observedAt.getTime(),
     );
@@ -69,7 +104,7 @@ export class TopicAggregationService {
     const keywords = this.collectMetadataStrings(signals, 'keywords');
     const sourceTypes = [...new Set(signals.map((signal) => signal.signalType))];
     const authors = this.collectMetadataStrings(signals, 'authorHandles');
-    const hotnessMetrics = this.calculateHotnessMetrics(sortedSignals);
+    const hotnessMetrics = await this.calculateHotnessMetrics(sortedSignals);
 
     return {
       topicWatchId,
@@ -128,28 +163,76 @@ export class TopicAggregationService {
     return titles.slice(0, 3).join(' / ');
   }
 
-  private calculateHotnessMetrics(signals: Signal[]) {
+  private async calculateHotnessMetrics(signals: Signal[]) {
     const lastSeenAt = signals[signals.length - 1]?.observedAt ?? new Date();
     const b3hWindowStart = lastSeenAt.getTime() - 3 * 60 * 60 * 1000;
     const b24hWindowStart = lastSeenAt.getTime() - 24 * 60 * 60 * 1000;
     const postSignals = signals.filter((signal) => isPostSignal(signal.signalType));
-    const scoredSignals = postSignals.map((signal) => ({
-      signal,
-      score: calculatePostTrafficScore(signal),
-    }));
+    const scoredSignals = await Promise.all(
+      postSignals.map((signal) => this.calculateRelativePostPerformance(signal)),
+    );
     const maxScore = scoredSignals.reduce(
-      (best, item) => (item.score > best.score ? item : best),
-      { signal: undefined as Signal | undefined, score: 0 },
+      (best, item) => (item.relativeScore > best.relativeScore ? item : best),
+      {
+        signal: undefined as Signal | undefined,
+        relativeScore: 0,
+        isTop5Percent: null as boolean | null,
+        reason: '候选中没有可计算流量的帖子。',
+      },
     );
 
     return {
       b3h: countUniqueAuthorsInWindow(postSignals, b3hWindowStart),
       b24h: countUniqueAuthorsInWindow(postSignals, b24hWindowStart),
-      tmax: maxScore.score,
+      tmax: maxScore.relativeScore,
       tmaxSignalId: maxScore.signal?.id ?? null,
-      tmaxTop5Percent: null,
-      tmaxTop5PercentReason:
-        '当前候选指标未包含账号近期历史分位基准，需由 Agent 调工具补证据或请求人工复核。',
+      tmaxTop5Percent: maxScore.isTop5Percent,
+      tmaxTop5PercentReason: maxScore.reason,
+    };
+  }
+
+  private async calculateRelativePostPerformance(signal: Signal) {
+    const authorHandle = getSignalAuthor(signal);
+    const currentScore = calculatePostTrafficScore(signal);
+
+    if (!authorHandle) {
+      return {
+        signal,
+        relativeScore: currentScore,
+        isTop5Percent: null,
+        reason: '缺少作者账号，无法计算账号近期历史分位。',
+      };
+    }
+
+    const recentSignals =
+      await this.topicWatchRepository.listRecentPostSignalsByAuthor({
+        authorHandle,
+        observedBefore: signal.observedAt,
+        take: 30,
+      });
+    const historyScores = recentSignals
+      .filter((item) => item.id !== signal.id)
+      .map(calculatePostTrafficScore)
+      .filter((score) => score > 0)
+      .sort((left, right) => right - left);
+    const baseline = median(historyScores);
+    const relativeScore =
+      baseline > 0 ? roundMetric(currentScore / baseline) : currentScore;
+    const rankedScores = [currentScore, ...historyScores].sort(
+      (left, right) => right - left,
+    );
+    const rank = rankedScores.findIndex((score) => score === currentScore) + 1;
+    const topThreshold = Math.max(1, Math.ceil(rankedScores.length * 0.05));
+
+    return {
+      signal,
+      relativeScore,
+      isTop5Percent:
+        historyScores.length > 0 ? rank > 0 && rank <= topThreshold : null,
+      reason:
+        historyScores.length > 0
+          ? `基于作者近期 ${historyScores.length} 条有效帖子计算，中位基准 ${baseline}，当前排名 ${rank}/${rankedScores.length}。`
+          : '缺少作者近期有效帖子历史，无法判断是否进入前 5%。',
     };
   }
 }
@@ -158,13 +241,57 @@ function isPostSignal(signalType: string) {
   return signalType === 'post' || signalType.endsWith('_post');
 }
 
+function normalizeSignalText(signal: Signal) {
+  const rawText = signal.summary ?? signal.title;
+  return rawText
+    .replace(/^.{1,40}[：:]\s*/u, '')
+    .replace(/https?:\/\/\S+/gu, ' ')
+    .replace(/&amp;/gu, '&')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function tokenizeTopicText(text: string) {
+  const tokens = new Set<string>();
+
+  for (const token of text.split(/\s+/u)) {
+    if (token.length < 3) continue;
+    if (TOPIC_STOP_WORDS.has(token)) continue;
+    tokens.add(token);
+  }
+
+  return tokens;
+}
+
+function shouldMergeProfiles(left: Set<string>, right: Set<string>) {
+  if (left.size === 0 || right.size === 0) return false;
+
+  let intersection = 0;
+  for (const token of right) {
+    if (left.has(token)) intersection += 1;
+  }
+
+  const smallerSize = Math.min(left.size, right.size);
+  const unionSize = new Set([...left, ...right]).size;
+  const containment = intersection / smallerSize;
+  const jaccard = intersection / unionSize;
+
+  return intersection >= 5 && (containment >= 0.65 || jaccard >= 0.55);
+}
+
+function createTokenSignature(tokens: Set<string>) {
+  return [...tokens].sort().slice(0, 12).join(':');
+}
+
 function countUniqueAuthorsInWindow(signals: Signal[], windowStartAt: number) {
   const authors = new Set<string>();
 
   for (const signal of signals) {
     if (signal.observedAt.getTime() < windowStartAt) continue;
     const author = getSignalAuthor(signal);
-    if (author) authors.add(author);
+    if (author) authors.add(author.toLowerCase());
   }
 
   return authors.size;
@@ -178,12 +305,12 @@ function getSignalAuthor(signal: Signal) {
 
   const authorHandle = metadata.authorHandle;
   if (typeof authorHandle === 'string' && authorHandle.trim()) {
-    return authorHandle.trim().toLowerCase();
+    return authorHandle.trim();
   }
 
   const authorHandles = metadata.authorHandles;
   if (Array.isArray(authorHandles) && typeof authorHandles[0] === 'string') {
-    return authorHandles[0].trim().toLowerCase();
+    return authorHandles[0].trim();
   }
 
   return null;
@@ -203,6 +330,69 @@ function calculatePostTrafficScore(signal: Signal) {
   );
 }
 
+function median(values: number[]) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function roundMetric(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 function getNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
+
+const TOPIC_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  'that',
+  'this',
+  'are',
+  'was',
+  'were',
+  'has',
+  'have',
+  'had',
+  'will',
+  'would',
+  'could',
+  'should',
+  'into',
+  'about',
+  'after',
+  'before',
+  'over',
+  'under',
+  'while',
+  'when',
+  'what',
+  'who',
+  'why',
+  'how',
+  'its',
+  'their',
+  'they',
+  'you',
+  'your',
+  'our',
+  'out',
+  'not',
+  'but',
+  'can',
+  'just',
+  'new',
+  'now',
+  'via',
+  'says',
+  'said',
+  'reportedly',
+]);
