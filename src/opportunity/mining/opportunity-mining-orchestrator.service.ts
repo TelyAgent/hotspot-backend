@@ -9,6 +9,9 @@ import { OpportunityMiningAgentService } from './opportunity-mining-agent.servic
 import { OpportunityMiningDecisionValidator } from './opportunity-mining-decision.validator';
 import { OpportunityMiningEvidenceService } from './opportunity-mining-evidence.service';
 import { EventLabelingService } from '../labeling/event-labeling.service';
+import { EventIdentity } from '../../event-merge/event-merge.types';
+import { EventMergeRepository } from '../../event-merge/event-merge.repository';
+import { EventMergeOrchestratorService } from '../../event-merge/event-merge-orchestrator.service';
 import {
   OpportunityMiningGoal,
   OpportunityMiningRunResult,
@@ -23,6 +26,8 @@ export class OpportunityMiningOrchestratorService {
     private readonly decisionValidator: OpportunityMiningDecisionValidator,
     private readonly opportunityRepository: OpportunityRepository,
     private readonly eventLabelingService: EventLabelingService,
+    private readonly eventMergeRepository: EventMergeRepository,
+    private readonly eventMergeOrchestrator: EventMergeOrchestratorService,
   ) {}
 
   async run(input: {
@@ -177,8 +182,11 @@ export class OpportunityMiningOrchestratorService {
     agentRunId?: string,
   ): Promise<OpportunityMiningRunResult> {
     if (decision.decision === 'create_event') {
+      const matchedEvidence = evidence.filter((item) =>
+        decision.evidenceRefs.includes(item.id),
+      );
       const labels = await this.eventLabelingService.buildLabels({
-        evidence: evidence.filter((item) => decision.evidenceRefs.includes(item.id)),
+        evidence: matchedEvidence,
       });
       const event = await this.opportunityRepository.createEvent({
         title: decision.title,
@@ -191,6 +199,33 @@ export class OpportunityMiningOrchestratorService {
         confidence: decision.confidence,
         status: 'suggested',
       });
+      const sourceContext = await this.eventMergeRepository.createSourceContext({
+        mainEventId: event.id,
+        sourceType: this.inferSourceType(labels, matchedEvidence),
+        sourceEventId:
+          matchedEvidence[0]?.sourceItemId ?? matchedEvidence[0]?.signalId ?? undefined,
+        triggerType: this.inferTriggerType(labels, decision),
+        triggerRuleCode: this.inferTriggerRuleCode(labels),
+        ruleVersion: this.optionalString(decision.metadata?.ruleVersion),
+        title: decision.title,
+        summary: decision.summary,
+        identity: this.buildEventIdentity(decision, matchedEvidence),
+        evidenceRefs: decision.evidenceRefs,
+        signalRefs: this.uniqueStrings(
+          matchedEvidence
+            .map((item) => item.signalId)
+            .filter((value): value is string => Boolean(value)),
+        ),
+        triggeredAt: matchedEvidence[0]?.observedAt ?? new Date(),
+        payload: {
+          title: decision.title,
+          opportunityType: decision.opportunityType,
+          labels,
+          summary: decision.summary,
+          agentRunId,
+        },
+      });
+      await this.eventMergeOrchestrator.processIncomingContext(sourceContext);
 
       return {
         decision,
@@ -232,6 +267,80 @@ export class OpportunityMiningOrchestratorService {
       decision,
       agentRunId,
     };
+  }
+
+  private inferSourceType(
+    labels: Awaited<ReturnType<EventLabelingService['buildLabels']>>,
+    evidence: EvidenceItem[],
+  ): string {
+    const sourceLabel = labels.find((label) => label.category === 'source');
+    return (
+      this.optionalString(sourceLabel?.sourcePath) ??
+      this.optionalString(sourceLabel?.code) ??
+      this.optionalString(evidence[0]?.sourceType) ??
+      'unknown'
+    );
+  }
+
+  private inferTriggerType(
+    labels: Awaited<ReturnType<EventLabelingService['buildLabels']>>,
+    decision: OpportunityMiningDecision,
+  ): string {
+    return (
+      this.optionalString(labels.find((label) => label.category === 'trigger')?.code) ??
+      decision.opportunityType
+    );
+  }
+
+  private inferTriggerRuleCode(
+    labels: Awaited<ReturnType<EventLabelingService['buildLabels']>>,
+  ): string {
+    return (
+      this.optionalString(labels.find((label) => label.category === 'trigger')?.code) ??
+      'agent_decision'
+    );
+  }
+
+  private buildEventIdentity(
+    decision: OpportunityMiningDecision,
+    evidence: EvidenceItem[],
+  ): EventIdentity {
+    const metadataIdentity = decision.metadata?.identity;
+    if (this.isEventIdentity(metadataIdentity)) {
+      return metadataIdentity;
+    }
+
+    return {
+      subject: this.extractSubject(decision.title),
+      action: 'unknown',
+      object: decision.title,
+      time: {
+        exactAt: evidence[0]?.observedAt?.toISOString() ?? new Date().toISOString(),
+      },
+      state: 'unknown',
+      coreFact: decision.summary,
+    };
+  }
+
+  private extractSubject(title: string): string {
+    const subject = title.split(/[：:·|-]/)[0]?.trim();
+    return subject || title;
+  }
+
+  private isEventIdentity(value: unknown): value is EventIdentity {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+
+    const identity = value as Partial<EventIdentity>;
+    return Boolean(
+      identity.subject &&
+        identity.action &&
+        identity.object &&
+        identity.time &&
+        identity.state &&
+        identity.coreFact,
+    );
   }
 
   private async recordMiningRun(input: {

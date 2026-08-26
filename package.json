@@ -9,6 +9,7 @@
     "start:dev": "nest start --watch",
     "prisma:generate": "prisma generate",
     "db:seed": "ts-node prisma/seed.ts",
+    "backfill:event-contexts": "ts-node scripts/backfill-event-source-contexts.ts",
     "demo:agent": "ts-node scripts/demo-agent-run.ts",
     "demo:pipeline": "ts-node scripts/demo-pipeline.ts",
     "typecheck": "tsc --noEmit",

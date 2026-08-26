@@ -7,6 +7,7 @@ import { DataSourceModule } from './data-source/data-source.module';
 import { PrismaModule } from './database/prisma.module';
 import { AssignmentModule } from './assignment/assignment.module';
 import { ContentModule } from './content/content.module';
+import { EventMergeModule } from './event-merge/event-merge.module';
 import { FutureEventModule } from './future-event/future-event.module';
 import { OpportunityModule } from './opportunity/opportunity.module';
 import { PerformanceModule } from './performance/performance.module';
@@ -30,6 +31,7 @@ import { YoutubeModule } from './youtube/youtube.module';
     OpportunityModule,
     AssignmentModule,
     ContentModule,
+    EventMergeModule,
     PerformanceModule,
     YoutubeModule,
   ],

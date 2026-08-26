@@ -573,6 +573,10 @@ model Event {
   missingData   Json
   riskNotes     Json
   labels        Json?
+  canonicalEventId String?
+  contextVersion   Int      @default(1)
+  identity          Json?
+  sourceSummary     Json?
   confidence    String
   status        String
   createdAt     DateTime @default(now())
@@ -580,7 +584,69 @@ model Event {
 
   @@index([eventType, status])
   @@index([occurredAt])
+  @@index([canonicalEventId])
   @@map("events")
+}
+
+model EventSourceContext {
+  id              String   @id @default(cuid())
+  mainEventId     String?
+  sourceEventId   String?
+  sourceType      String
+  triggerType     String
+  triggerRuleCode String?
+  ruleVersion     String?
+  contextVersion  Int      @default(1)
+  title           String
+  summary         String
+  identity        Json
+  evidenceRefs    Json
+  signalRefs      Json
+  payload         Json
+  triggeredAt     DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([mainEventId, sourceType])
+  @@index([sourceType, triggeredAt])
+  @@map("event_source_contexts")
+}
+
+model EventMergeDecision {
+  id                   String   @id @default(cuid())
+  incomingContextId     String
+  candidateMainEventId  String?
+  decision             String
+  mergeConfidence      Float
+  hardConflict         Boolean  @default(false)
+  dimensionResults     Json
+  conflictPoints       Json
+  evidenceRefs         Json
+  impact               Json
+  agentRunId           String?
+  decidedBy            String
+  decidedAt            DateTime @default(now())
+  createdAt            DateTime @default(now())
+
+  @@index([incomingContextId])
+  @@index([candidateMainEventId, decidedAt])
+  @@map("event_merge_decisions")
+}
+
+model EventRelation {
+  id           String   @id @default(cuid())
+  fromEventId  String
+  toEventId    String
+  relationType String
+  reason       String
+  evidenceRefs Json
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  @@unique([fromEventId, toEventId, relationType])
+  @@index([fromEventId])
+  @@index([toEventId])
+  @@map("event_relations")
 }
 
 model AssignmentRun {

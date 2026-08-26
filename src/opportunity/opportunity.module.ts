@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AgentModule } from '../agent/agent.module';
+import { EventMergeModule } from '../event-merge/event-merge.module';
 import { OpportunityMiningDecisionValidator } from './mining/opportunity-mining-decision.validator';
 import { OpportunityMiningEvidenceService } from './mining/opportunity-mining-evidence.service';
 import { OpportunityMiningAgentService } from './mining/opportunity-mining-agent.service';
@@ -13,7 +14,7 @@ import { OpportunityRulePackGovernanceService } from './rule-pack/opportunity-ru
 import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-pack-loader.service';
 
 @Module({
-  imports: [AgentModule],
+  imports: [AgentModule, EventMergeModule],
   controllers: [OpportunityController],
   providers: [
     OpportunityRepository,
