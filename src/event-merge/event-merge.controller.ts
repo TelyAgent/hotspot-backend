@@ -28,6 +28,8 @@ export class EventMergeController {
             conflictPoints: latestDecision.conflictPoints,
             systemAction: systemActionName(latestDecision.decision),
             reason: latestDecision.impact.reason,
+            decidedAt: latestDecision.decidedAt,
+            createdAt: latestDecision.createdAt,
           }
         : undefined,
       relations,

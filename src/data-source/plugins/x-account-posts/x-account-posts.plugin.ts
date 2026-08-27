@@ -275,6 +275,7 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
           sourceItemId: input.rawItem.sourceItemId,
           text,
           url: getString(item.url),
+          publishedAt: item.publishedAt ? new Date(item.publishedAt) : undefined,
           metrics,
           confidence: 'high',
           metadata: {

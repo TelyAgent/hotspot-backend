@@ -142,6 +142,7 @@ describe('XAccountPostsPlugin', () => {
         sourceItemId: 'post_1',
         url: 'https://x.com/OpenAI/status/post_1',
         text: 'Introducing a new model for developers.',
+        publishedAt: new Date('2026-08-24T10:00:00.000Z'),
       }),
     );
   });

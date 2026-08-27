@@ -167,6 +167,8 @@ export interface EventMergeDetailDto {
     conflictPoints: string[];
     systemAction: string;
     reason: string;
+    decidedAt: Date;
+    createdAt: Date;
   };
   relations: EventRelationDto[];
 }
