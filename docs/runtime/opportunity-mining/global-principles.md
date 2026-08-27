@@ -7,9 +7,32 @@
 ## 事实边界
 
 - 只能基于 Signal、Evidence、工具返回结果和规则文档做判断。
+- 优先阅读 `goal.evidenceMemory.enrichedPackages`：
+  - `qualityGate` 表示当前证据是否足以形成正式事件。
+  - `conservativeTitle` 是证据不足时的保守标题参考。
+  - `domainLabels` 是系统根据固定领域集合识别出的候选领域。
 - 不能把热度、传闻或单个账号观点直接当成事实。
 - 如果事实来自二手转述，需要在风险说明里标注。
 - 如果关键信息无法确认，应输出 `request_human_review` 或 `ignore`。
+
+## 中文输出
+
+- 所有给运营人员看的标题、摘要、解释、缺失数据和风险说明必须使用中文。
+- 专有名词、平台名、产品名、机构名、人名可以保留原文。
+- 如果原始证据是英文、韩文、日文、俄文或其他语言，需要用中文概括其含义。
+
+## 固定领域
+
+事件领域只能从以下固定集合中选择，不要自造领域：
+
+- `AI`
+- `Technology`
+- `Politics & Elections`
+- `Geopolitics & Conflict`
+- `Macro & Financial Markets`
+- `Crypto & Web3`
+- `Prediction Markets`
+- `Official Schedule`
 
 ## 机会判断
 
@@ -30,4 +53,3 @@
 - 涉及政治、金融、医疗、法律等高风险内容。
 - 可能伤害品牌安全。
 - 需要产品、合规或运营负责人判断。
-

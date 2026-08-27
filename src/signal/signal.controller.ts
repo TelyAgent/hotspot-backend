@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { parseTake } from '../common/utils/request.util';
+import { SignalEvidenceEnrichmentService } from './enrichment/signal-evidence-enrichment.service';
 import { EvidenceRepository } from './evidence/evidence.repository';
 import { SignalRepository } from './signal/signal.repository';
 
@@ -8,6 +9,7 @@ export class SignalController {
   constructor(
     private readonly signalRepository: SignalRepository,
     private readonly evidenceRepository: EvidenceRepository,
+    private readonly enrichmentService: SignalEvidenceEnrichmentService,
   ) {}
 
   @Get()
@@ -33,6 +35,15 @@ export class SignalController {
     return this.evidenceRepository.findMany({
       signalId: id,
       take: parseTake(take),
+    });
+  }
+
+  @Get(':id/enrichment')
+  getEnrichment(@Param('id') id: string, @Query('maxEvidence') maxEvidence?: string) {
+    return this.enrichmentService.enrich({
+      signalId: id,
+      mode: 'manual_refresh',
+      maxEvidence: parseTake(maxEvidence),
     });
   }
 }

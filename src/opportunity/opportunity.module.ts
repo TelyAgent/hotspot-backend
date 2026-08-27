@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentModule } from '../agent/agent.module';
 import { EventMergeModule } from '../event-merge/event-merge.module';
+import { SignalEvidenceEnrichmentModule } from '../signal/enrichment/signal-evidence-enrichment.module';
 import { OpportunityMiningDecisionValidator } from './mining/opportunity-mining-decision.validator';
 import { OpportunityMiningEvidenceService } from './mining/opportunity-mining-evidence.service';
 import { OpportunityMiningAgentService } from './mining/opportunity-mining-agent.service';
@@ -10,11 +11,12 @@ import { OpportunityMiningSignalSelectorService } from './mining/opportunity-min
 import { OpportunityController } from './opportunity.controller';
 import { OpportunityRepository } from './opportunity.repository';
 import { EventLabelingService } from './labeling/event-labeling.service';
+import { EventDomainLabelService } from './labeling/event-domain-label.service';
 import { OpportunityRulePackGovernanceService } from './rule-pack/opportunity-rule-pack-governance.service';
 import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-pack-loader.service';
 
 @Module({
-  imports: [AgentModule, EventMergeModule],
+  imports: [AgentModule, EventMergeModule, SignalEvidenceEnrichmentModule],
   controllers: [OpportunityController],
   providers: [
     OpportunityRepository,
@@ -24,6 +26,7 @@ import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-p
     OpportunityMiningOrchestratorService,
     OpportunityMiningSchedulerService,
     OpportunityMiningSignalSelectorService,
+    EventDomainLabelService,
     EventLabelingService,
     OpportunityRulePackGovernanceService,
     OpportunityRulePackLoaderService,
@@ -33,6 +36,7 @@ import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-p
     OpportunityMiningAgentService,
     OpportunityMiningOrchestratorService,
     OpportunityMiningSignalSelectorService,
+    EventDomainLabelService,
     EventLabelingService,
     OpportunityRulePackGovernanceService,
     OpportunityRulePackLoaderService,

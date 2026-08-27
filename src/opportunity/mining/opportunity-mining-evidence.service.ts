@@ -1,17 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import {
+  EnrichedEvidencePackage,
+  EnrichSignalEvidenceInput,
+} from '../../signal/enrichment/signal-evidence-enrichment.types';
+import { SignalEvidenceEnrichmentService } from '../../signal/enrichment/signal-evidence-enrichment.service';
 import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { Signal } from '../../signal/signal/signal.types';
 
 export interface OpportunityMiningEvidenceMemory {
   signals: Signal[];
   evidence: EvidenceItem[];
+  enrichedPackages: EnrichedEvidencePackage[];
   missingData: string[];
 }
 
 @Injectable()
 export class OpportunityMiningEvidenceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly enrichmentService?: SignalEvidenceEnrichmentService,
+  ) {}
 
   async load(input: {
     seedSignalIds: string[];
@@ -32,6 +42,10 @@ export class OpportunityMiningEvidenceService {
     const missingData = input.seedSignalIds
       .filter((id) => !foundSignalIds.has(id))
       .map((id) => `Signal 不存在：${id}`);
+    const enrichedPackages = await this.enrichSignals({
+      signalIds: signals.map((signal) => signal.id),
+      maxEvidencePerSignal: input.maxEvidencePerSignal,
+    });
 
     const evidenceFromSignals = await this.prisma.evidenceItem.findMany({
       where: {
@@ -66,8 +80,34 @@ export class OpportunityMiningEvidenceService {
     return {
       signals: signals as unknown as Signal[],
       evidence,
-      missingData,
+      enrichedPackages,
+      missingData: this.uniqueStrings([
+        ...missingData,
+        ...enrichedPackages.flatMap((item) => item.qualityGate.missingData),
+      ]),
     };
+  }
+
+  private async enrichSignals(input: {
+    signalIds: string[];
+    maxEvidencePerSignal?: number;
+  }): Promise<EnrichedEvidencePackage[]> {
+    if (!this.enrichmentService || input.signalIds.length === 0) {
+      return [];
+    }
+
+    const packages: EnrichedEvidencePackage[] = [];
+    for (const signalId of input.signalIds) {
+      packages.push(
+        await this.enrichmentService.enrich({
+          signalId,
+          mode: 'before_opportunity_mining',
+          maxEvidence: input.maxEvidencePerSignal ?? 20,
+        } satisfies EnrichSignalEvidenceInput),
+      );
+    }
+
+    return packages;
   }
 
   private dedupeEvidence(items: EvidenceItem[]): EvidenceItem[] {
@@ -81,5 +121,8 @@ export class OpportunityMiningEvidenceService {
       return true;
     });
   }
-}
 
+  private uniqueStrings(values: string[]): string[] {
+    return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+  }
+}

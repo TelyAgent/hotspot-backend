@@ -1,10 +1,11 @@
 import { EventLabelingService } from './event-labeling.service';
 import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { PrismaService } from '../../database/prisma.service';
+import { EventDomainLabelService } from './event-domain-label.service';
 
 describe('EventLabelingService', () => {
   it('labels x trend source and top 5 only when rank is within top 5', async () => {
-    const service = new EventLabelingService(createPrisma());
+    const service = createService();
 
     const labels = await service.buildLabels({
       evidence: [
@@ -30,24 +31,24 @@ describe('EventLabelingService', () => {
     expect(labels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'x_trend',
-          name: 'X 热搜',
+          code: 'X Trend',
+          name: 'X Trend',
           category: 'source',
           evidenceRefs: ['ev_top', 'ev_normal'],
         }),
         expect.objectContaining({
-          code: 'x_trend_top_5',
-          name: 'Top 5',
+          code: 'Top5',
+          name: 'Top5',
           category: 'trigger',
           evidenceRefs: ['ev_top'],
         }),
       ]),
     );
-    expect(labels.some((label) => label.code === 'x_trend_fast_rising')).toBe(false);
+    expect(labels.some((label) => label.code === 'Fast Rising')).toBe(false);
   });
 
   it('labels fast rising only when rank movement evidence exists', async () => {
-    const service = new EventLabelingService(createPrisma());
+    const service = createService();
 
     const labels = await service.buildLabels({
       evidence: [
@@ -66,7 +67,7 @@ describe('EventLabelingService', () => {
     expect(labels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'x_trend_fast_rising',
+          code: 'Fast Rising',
           name: 'Fast Rising',
           category: 'trigger',
           evidenceRefs: ['ev_rising'],
@@ -76,7 +77,7 @@ describe('EventLabelingService', () => {
   });
 
   it('labels fast rising from x trend snapshot diffs when evidence does not include previous rank', async () => {
-    const service = new EventLabelingService(
+    const service = createService(
       createPrisma({
         xTrendSnapshotDiff: {
           findFirst: jest.fn(() =>
@@ -109,7 +110,7 @@ describe('EventLabelingService', () => {
     expect(labels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'x_trend_fast_rising',
+          code: 'Fast Rising',
           name: 'Fast Rising',
           category: 'trigger',
           evidenceRefs: ['ev_diff'],
@@ -119,7 +120,7 @@ describe('EventLabelingService', () => {
   });
 
   it('labels first party confirmation from S1 topic watch account evidence', async () => {
-    const service = new EventLabelingService(
+    const service = createService(
       createPrisma({
         topicWatchAccount: {
           findFirst: jest.fn(() =>
@@ -150,13 +151,13 @@ describe('EventLabelingService', () => {
     expect(labels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'topic_circle',
-          name: '关注圈层',
+          code: 'Topic Circle',
+          name: 'Topic Circle',
           category: 'source',
           evidenceRefs: ['ev_openai'],
         }),
         expect.objectContaining({
-          code: 'first_party_confirmed',
+          code: '第一方确认',
           name: '第一方确认',
           category: 'trigger',
           evidenceRefs: ['ev_openai'],
@@ -165,7 +166,105 @@ describe('EventLabelingService', () => {
       ]),
     );
   });
+
+  it('only emits fixed source and heat labels outside domain labels', async () => {
+    const service = createService(
+      createPrisma({
+        topicWatchAccount: {
+          findFirst: jest.fn(() =>
+            Promise.resolve({
+              handle: 'VitalikButerin',
+              primaryRole: '核心人物',
+              singleTriggerPolicy: 'S2',
+              authorityScope: '以太坊生态',
+            }),
+          ),
+        },
+      }),
+    );
+
+    const labels = await service.buildLabels({
+      evidence: [
+        createEvidence({
+          id: 'ev_x',
+          sourceType: 'x_trend',
+          metadata: {
+            rank: 4,
+            previousRank: 20,
+            region: 'United States',
+          },
+        }),
+        createEvidence({
+          id: 'ev_topic',
+          sourceType: 'x_account_post',
+          metadata: {
+            topicWatchId: 'topic-crypto',
+            authorHandle: 'VitalikButerin',
+          },
+        }),
+        createEvidence({
+          id: 'ev_future',
+          sourceType: 'future_event_source_item',
+        }),
+      ],
+    });
+
+    const fixed = new Set([
+      'X Trend',
+      'Topic Circle',
+      'Future Event',
+      'Top5',
+      'Fast Rising',
+      'Multi-region',
+      '第一方确认',
+      'Re-entry',
+    ]);
+    expect(labels.filter((label) => label.category !== 'domain')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'X Trend' }),
+        expect.objectContaining({ code: 'Topic Circle' }),
+        expect.objectContaining({ code: 'Future Event' }),
+        expect.objectContaining({ code: 'Top5' }),
+        expect.objectContaining({ code: 'Fast Rising' }),
+      ]),
+    );
+    expect(
+      labels
+        .filter((label) => label.category !== 'domain')
+        .every((label) => fixed.has(label.code)),
+    ).toBe(true);
+  });
+
+  it('adds fixed domain labels from evidence text', async () => {
+    const service = createService();
+
+    const labels = await service.buildLabels({
+      evidence: [
+        createEvidence({
+          id: 'ev_prediction',
+          sourceType: 'x_account_post',
+          claim: 'Polymarket 预测市场概率出现明显变化。',
+          text: 'Polymarket odds moved sharply after the debate.',
+        }),
+      ],
+    });
+
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'Prediction Markets',
+          name: 'Prediction Markets',
+          category: 'domain',
+          evidenceRefs: ['ev_prediction'],
+        }),
+      ]),
+    );
+  });
 });
+
+function createService(prisma = createPrisma()) {
+  return new EventLabelingService(prisma, new EventDomainLabelService());
+}
 
 function createEvidence(input: Partial<EvidenceItem>): EvidenceItem {
   return {

@@ -20,6 +20,40 @@ interface TrendSnapshotItemInput {
 export class XTrendSnapshotService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findLatestRanking(input: { region: string; limit: number }) {
+    const snapshot = await this.prisma.xTrendSnapshot.findFirst({
+      where: {
+        region: input.region,
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+      include: {
+        items: {
+          orderBy: {
+            rank: 'asc',
+          },
+          take: input.limit,
+        },
+      },
+    });
+
+    return {
+      region: input.region,
+      observedAt: snapshot?.observedAt.toISOString() ?? null,
+      items:
+        snapshot?.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          query: item.query,
+          rank: item.rank,
+          url: item.url,
+          heat: item.heat,
+          category: item.category,
+        })) ?? [],
+    };
+  }
+
   async createSnapshotsForCollection(input: {
     collectionRunId: string;
     observedAt: Date;
@@ -224,4 +258,3 @@ function getNumber(value: unknown, fallback = 0): number {
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-

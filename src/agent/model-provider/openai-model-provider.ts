@@ -142,6 +142,9 @@ export class OpenAiModelProvider implements ModelProvider {
         '当前 agentType=opportunity_mining。',
         '你必须先阅读 goal.ruleDocuments。规则文档是业务判断依据，但事实只能来自 goal.evidenceMemory、goal.sourceContext、evidence 或 toolResults。',
         '你需要根据 Signal 类型、目标和规则文档决定是否调用工具补充证据。',
+        '你必须优先阅读 goal.evidenceMemory.enrichedPackages；其中 qualityGate 表示证据是否足以形成正式事件，conservativeTitle 是证据不足时的保守标题参考。',
+        'title、summary、whyNow、whyItMatters、productAngles、contentWindow、missingData、riskNotes 必须使用中文；专有名词、平台名、产品名可以保留原文。',
+        '领域只能从固定集合中选择：AI、Technology、Politics & Elections、Geopolitics & Conflict、Macro & Financial Markets、Crypto & Web3、Prediction Markets、Official Schedule；不要自造其他领域标签。',
         '最终决策必须在 metadata.ruleDocumentRefs 中列出主要参考的规则文档 id。',
         '如果 goal.ruleDocuments 缺失或为空，应输出 request_human_review，并在 missingData 中说明缺少规则文档。',
         '最终输出必须严格为：',
@@ -267,6 +270,11 @@ export class OpenAiModelProvider implements ModelProvider {
       return this.parseFinalDecision(parsed);
     }
 
+    const normalizedFinalDecision = this.tryNormalizeFinalDecision(parsed);
+    if (normalizedFinalDecision) {
+      return normalizedFinalDecision;
+    }
+
     throw new DomainError(
       'OpenAI model output has an unknown step type.',
       'OPENAI_MODEL_OUTPUT_UNKNOWN_TYPE',
@@ -309,6 +317,35 @@ export class OpenAiModelProvider implements ModelProvider {
       type: 'final_decision',
       decision: value.decision,
     };
+  }
+
+  private tryNormalizeFinalDecision(value: JsonObject): AgentStepOutput | null {
+    const candidates = [
+      value.decision,
+      value.answer,
+      value.result,
+      value.final,
+      value.finalDecision,
+    ];
+    const decision = candidates.find((candidate): candidate is JsonObject =>
+      this.isJsonObject(candidate as JsonValue),
+    );
+
+    if (decision) {
+      return {
+        type: 'final_decision',
+        decision,
+      };
+    }
+
+    if (typeof value.decision === 'string') {
+      return {
+        type: 'final_decision',
+        decision: value,
+      };
+    }
+
+    return null;
   }
 
   private isJsonObject(value: JsonValue | undefined): value is JsonObject {

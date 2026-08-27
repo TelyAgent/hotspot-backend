@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { JsonObject } from '../common/types/json.type';
 import { parseTake } from '../common/utils/request.util';
 import { DataSourcePluginRegistry } from './registry/data-source-plugin.registry';
+import { XTrendSnapshotService } from './plugins/x-trends/x-trend-snapshot.service';
 import { CollectionRunRepository } from './runner/collection-run.repository';
 import { CollectionRunnerService } from './runner/collection-runner.service';
 
@@ -12,6 +13,7 @@ export class DataSourceController {
     private readonly registry: DataSourcePluginRegistry,
     private readonly runner: CollectionRunnerService,
     private readonly collectionRunRepository: CollectionRunRepository,
+    private readonly xTrendSnapshotService: XTrendSnapshotService,
   ) {}
 
   @Get('plugins')
@@ -31,6 +33,17 @@ export class DataSourceController {
     });
   }
 
+  @Get('x-trends/latest')
+  getLatestXTrendRanking(
+    @Query('region') region?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.xTrendSnapshotService.findLatestRanking({
+      region: normalizeXTrendRegion(region),
+      limit: parseTake(limit),
+    });
+  }
+
   @Post('collect')
   collect(@Body() body: Record<string, unknown>) {
     return this.runner.run({
@@ -41,6 +54,11 @@ export class DataSourceController {
       observedAt: body.observedAt ? new Date(String(body.observedAt)) : undefined,
     });
   }
+}
+
+function normalizeXTrendRegion(value?: string) {
+  if (!value || value === 'Worldwide') return 'global';
+  return value;
 }
 
 function toJsonObject(value: unknown): JsonObject {

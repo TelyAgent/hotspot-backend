@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CollectionRunRepository } from '../../data-source/runner/collection-run.repository';
 import { TopicWatchCollectionService } from '../collection/topic-watch-collection.service';
 import { TopicWatchRepository } from '../topic-watch.repository';
 
@@ -17,6 +18,7 @@ export class TopicWatchSchedulerService implements OnModuleInit, OnModuleDestroy
     private readonly configService: ConfigService,
     private readonly topicWatchRepository: TopicWatchRepository,
     private readonly topicWatchCollectionService: TopicWatchCollectionService,
+    private readonly collectionRunRepository: CollectionRunRepository,
   ) {}
 
   onModuleInit(): void {
@@ -57,6 +59,16 @@ export class TopicWatchSchedulerService implements OnModuleInit, OnModuleDestroy
       Math.max(1, intervalMinutes ?? DEFAULT_INTERVAL_MINUTES) * 60 * 1000;
 
     if (this.lastStartedAt && now - this.lastStartedAt < intervalMs) {
+      return;
+    }
+
+    const latestRuns = await this.collectionRunRepository.findByJobIdPrefix({
+      jobIdPrefix: 'topic_watch_',
+      take: 1,
+    });
+    const latestRun = latestRuns[0];
+    if (latestRun && now - latestRun.startedAt.getTime() < intervalMs) {
+      this.lastStartedAt = latestRun.startedAt.getTime();
       return;
     }
 

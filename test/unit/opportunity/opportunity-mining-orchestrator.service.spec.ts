@@ -424,4 +424,137 @@ describe('OpportunityMiningOrchestratorService', () => {
       }),
     );
   });
+
+  it('does not persist an event when the enriched evidence quality gate blocks event creation', async () => {
+    const evidenceService = {
+      load: jest.fn(() =>
+        Promise.resolve({
+          signals: [
+            {
+              id: 'sig_1',
+              signalType: 'x_trend',
+              observedAt: new Date('2026-08-27T08:00:00.000Z'),
+            },
+          ],
+          evidence: [
+            {
+              id: 'evi_1',
+              signalId: 'sig_1',
+              sourceType: 'x_trend',
+              claim: 'Polymarket 进入 United States X 热榜。',
+              url: 'https://x.com/search?q=Polymarket',
+              confidence: 'high',
+              observedAt: new Date('2026-08-27T08:00:00.000Z'),
+              createdAt: new Date('2026-08-27T08:00:00.000Z'),
+              updatedAt: new Date('2026-08-27T08:00:00.000Z'),
+            },
+          ],
+          enrichedPackages: [
+            {
+              signalId: 'sig_1',
+              signalType: 'x_trend',
+              evidenceRefs: ['evi_1'],
+              evidenceItems: [],
+              qualityGate: {
+                level: 'thin',
+                canCreateEvent: false,
+                canUseHighConfidence: false,
+                hasOpenableSource: true,
+                hasReasonEvidence: false,
+                hasActorActionObject: false,
+                missingData: ['缺少解释热搜原因的相关帖子或外部来源。'],
+                riskNotes: ['当前只有热搜榜信号，不能直接当成现实事件事实。'],
+              },
+              conservativeTitle: 'United States X 热搜：Polymarket',
+              domainLabels: [],
+              enrichmentSummary: '缺少解释热搜原因的相关帖子或外部来源。',
+            },
+          ],
+          missingData: [],
+        }),
+      ),
+    } as unknown as OpportunityMiningEvidenceService;
+    const rulePackLoader = {
+      loadActiveRulePack: jest.fn(() =>
+        Promise.resolve({
+          id: 'rule_pack_1',
+          version: 1,
+          status: 'active',
+          basePath: '/tmp/rules',
+          documents: [],
+          routes: [],
+        }),
+      ),
+      selectDocuments: jest.fn(() => [
+        {
+          id: 'x-trend-rules',
+          title: 'X 热搜挖掘规则',
+          path: '/tmp/rules/x-trend-rules.md',
+          markdown: '# X 热搜挖掘规则',
+        },
+      ]),
+    } as unknown as OpportunityRulePackLoaderService;
+    const miningAgentService = {
+      evaluateGoalWithRun: jest.fn(() =>
+        Promise.resolve({
+          agentRunId: 'agent_run_1',
+          decision: {
+            decision: 'create_event',
+            title: 'Polymarket 热搜事件',
+            opportunityType: 'news_event',
+            summary: 'Polymarket 热搜形成事件。',
+            whyNow: '进入热榜。',
+            whyItMatters: '值得响应。',
+            productAngles: [],
+            contentWindow: '24 小时',
+            confidence: 'high',
+            evidenceRefs: ['evi_1'],
+            missingData: [],
+            riskNotes: [],
+          },
+        }),
+      ),
+    } as unknown as OpportunityMiningAgentService;
+    const opportunityRepository = {
+      createOpportunity: jest.fn(),
+      createEvent: jest.fn(),
+      createMiningSignalRun: jest.fn(() => Promise.resolve({})),
+    } as unknown as OpportunityRepository;
+    const eventLabelingService = {
+      buildLabels: jest.fn(() => Promise.resolve([])),
+    } as unknown as EventLabelingService;
+    const eventMergeRepository = {
+      createSourceContext: jest.fn(),
+    } as unknown as EventMergeRepository;
+    const eventMergeOrchestrator = {
+      processIncomingContext: jest.fn(),
+    } as unknown as EventMergeOrchestratorService;
+    const service = new OpportunityMiningOrchestratorService(
+      evidenceService,
+      rulePackLoader,
+      miningAgentService,
+      new OpportunityMiningDecisionValidator(),
+      opportunityRepository,
+      eventLabelingService,
+      eventMergeRepository,
+      eventMergeOrchestrator,
+    );
+
+    const result = await service.run({
+      goal: service.createGoal({
+        instruction: '判断是否形成事件。',
+        seedSignalIds: ['sig_1'],
+        writeMode: 'allow_create',
+        type: 'form_event',
+      }),
+    });
+
+    expect(result.decision.decision).toBe('create_insight');
+    expect(result.decision.confidence).toBe('low');
+    expect(result.decision.missingData).toContain(
+      '缺少解释热搜原因的相关帖子或外部来源。',
+    );
+    expect(opportunityRepository.createEvent).not.toHaveBeenCalled();
+    expect(eventMergeRepository.createSourceContext).not.toHaveBeenCalled();
+  });
 });

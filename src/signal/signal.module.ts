@@ -7,9 +7,10 @@ import { RawItemService } from './raw-item/raw-item.service';
 import { SignalController } from './signal.controller';
 import { SignalRepository } from './signal/signal.repository';
 import { SignalService } from './signal/signal.service';
+import { SignalEvidenceEnrichmentModule } from './enrichment/signal-evidence-enrichment.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, SignalEvidenceEnrichmentModule],
   controllers: [SignalController],
   providers: [
     RawItemRepository,
@@ -19,6 +20,6 @@ import { SignalService } from './signal/signal.service';
     EvidenceRepository,
     EvidenceService,
   ],
-  exports: [RawItemService, SignalService, EvidenceService],
+  exports: [RawItemService, SignalService, EvidenceService, SignalEvidenceEnrichmentModule],
 })
 export class SignalModule {}

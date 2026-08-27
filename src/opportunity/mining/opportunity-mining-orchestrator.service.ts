@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { JsonObject } from '../../common/types/json.type';
 import { EvidenceItem } from '../../signal/evidence/evidence.types';
+import { EnrichedEvidencePackage } from '../../signal/enrichment/signal-evidence-enrichment.types';
 import { OpportunityRulePackLoaderService } from '../rule-pack/opportunity-rule-pack-loader.service';
 import { OpportunityMiningDecision } from '../opportunity.types';
 import { OpportunityRepository } from '../opportunity.repository';
@@ -74,9 +75,13 @@ export class OpportunityMiningOrchestratorService {
       const agentResult = await this.miningAgentService.evaluateGoalWithRun(goal, {
         signals: memory.signals,
         evidence: memory.evidence,
+        enrichedPackages: memory.enrichedPackages ?? [],
       });
       agentRunId = agentResult.agentRunId;
-      decision = this.normalizeEvidenceRefs(agentResult.decision, memory.evidence);
+      decision = this.applyEvidenceQualityGate(
+        this.normalizeEvidenceRefs(agentResult.decision, memory.evidence),
+        memory.enrichedPackages ?? [],
+      );
     } catch (error) {
       if (seedSignalId && idempotencyKey) {
         await this.opportunityRepository.createMiningSignalRun({
@@ -148,6 +153,62 @@ export class OpportunityMiningOrchestratorService {
         'Agent 返回的证据引用不是系统内真实证据，已使用当前 Signal 的真实证据回填。',
       ]),
     };
+  }
+
+  private applyEvidenceQualityGate(
+    decision: OpportunityMiningDecision,
+    enrichedPackages: EnrichedEvidencePackage[],
+  ): OpportunityMiningDecision {
+    if (enrichedPackages.length === 0) {
+      return decision;
+    }
+
+    const matchedPackages = enrichedPackages.filter((item) =>
+      this.hasEvidenceOverlap(item.evidenceRefs, decision.evidenceRefs),
+    );
+    const relatedPackages = matchedPackages.length ? matchedPackages : enrichedPackages;
+    const missingData = relatedPackages.flatMap((item) => item.qualityGate.missingData);
+    const riskNotes = relatedPackages.flatMap((item) => item.qualityGate.riskNotes);
+
+    if (
+      decision.decision === 'create_event' &&
+      relatedPackages.some((item) => !item.qualityGate.canCreateEvent)
+    ) {
+      return {
+        ...decision,
+        decision: 'create_insight',
+        confidence: 'low',
+        missingData: this.uniqueStrings([...decision.missingData, ...missingData]),
+        riskNotes: this.uniqueStrings([
+          ...decision.riskNotes,
+          ...riskNotes,
+          '证据质量门禁阻止将当前结果写入正式事件。',
+        ]),
+      };
+    }
+
+    if (
+      decision.confidence === 'high' &&
+      relatedPackages.some((item) => !item.qualityGate.canUseHighConfidence)
+    ) {
+      return {
+        ...decision,
+        confidence: 'medium',
+        missingData: this.uniqueStrings([...decision.missingData, ...missingData]),
+        riskNotes: this.uniqueStrings([...decision.riskNotes, ...riskNotes]),
+      };
+    }
+
+    return decision;
+  }
+
+  private hasEvidenceOverlap(left: string[], right: string[]): boolean {
+    if (!left.length || !right.length) {
+      return false;
+    }
+
+    const rightSet = new Set(right);
+    return left.some((item) => rightSet.has(item));
   }
 
   private uniqueStrings(values: string[]): string[] {

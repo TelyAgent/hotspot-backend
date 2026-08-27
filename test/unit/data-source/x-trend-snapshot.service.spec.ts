@@ -2,6 +2,69 @@ import { PrismaService } from '../../../src/database/prisma.service';
 import { XTrendSnapshotService } from '../../../src/data-source/plugins/x-trends/x-trend-snapshot.service';
 
 describe('XTrendSnapshotService', () => {
+  it('reads latest ranking from snapshot items', async () => {
+    const prisma = {
+      xTrendSnapshot: {
+        findFirst: jest.fn(() =>
+          Promise.resolve({
+            id: 'snapshot_latest',
+            region: 'global',
+            observedAt: new Date('2026-08-27T05:20:00.000Z'),
+            items: [
+              {
+                id: 'item_1',
+                name: 'OpenAI',
+                query: 'OpenAI',
+                rank: 1,
+                url: 'https://x.com/search?q=OpenAI',
+                heat: '100K',
+                category: null,
+              },
+            ],
+          }),
+        ),
+      },
+    } as unknown as PrismaService;
+    const service = new XTrendSnapshotService(prisma);
+
+    const result = await service.findLatestRanking({
+      region: 'global',
+      limit: 30,
+    });
+
+    expect(prisma.xTrendSnapshot.findFirst).toHaveBeenCalledWith({
+      where: {
+        region: 'global',
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+      include: {
+        items: {
+          orderBy: {
+            rank: 'asc',
+          },
+          take: 30,
+        },
+      },
+    });
+    expect(result).toEqual({
+      region: 'global',
+      observedAt: '2026-08-27T05:20:00.000Z',
+      items: [
+        {
+          id: 'item_1',
+          name: 'OpenAI',
+          query: 'OpenAI',
+          rank: 1,
+          url: 'https://x.com/search?q=OpenAI',
+          heat: '100K',
+          category: null,
+        },
+      ],
+    });
+  });
+
   it('creates regional snapshots and diffs against the previous snapshot', async () => {
     const prisma = {
       xTrendSnapshot: {

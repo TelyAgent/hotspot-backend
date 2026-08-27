@@ -94,6 +94,61 @@ describe('OpenAiModelProvider', () => {
     });
   });
 
+  it('normalizes common final answer shapes from the model', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            type: 'answer',
+            answer: {
+              decision: 'ignore',
+              title: '证据不足',
+            },
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await expect(provider.completeStructured(createInput())).resolves.toEqual({
+      type: 'final_decision',
+      decision: {
+        decision: 'ignore',
+        title: '证据不足',
+      },
+    });
+  });
+
+  it('normalizes bare decision objects from the model', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            decision: 'request_human_review',
+            title: '证据不足',
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await expect(provider.completeStructured(createInput())).resolves.toEqual({
+      type: 'final_decision',
+      decision: {
+        decision: 'request_human_review',
+        title: '证据不足',
+      },
+    });
+  });
+
   it('uses gpt-4o-mini by default when model is not configured', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve(
@@ -265,6 +320,39 @@ describe('OpenAiModelProvider', () => {
     expect(body.input[0].content[0].text).toContain(
       '不要用 signal.getRecent 或 xTrend.getRecentDiffs 代替当前榜单',
     );
+  });
+
+  it('instructs opportunity mining agent to output Chinese copy and fixed domain labels only', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            type: 'final_decision',
+            decision: {
+              decision: 'create_insight',
+            },
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await provider.completeStructured(createInput());
+
+    const body = JSON.parse(
+      String((global.fetch as jest.Mock).mock.calls[0][1].body),
+    ) as { input: Array<{ content: Array<{ text: string }> }> };
+    expect(body.input[0].content[0].text).toContain(
+      'title、summary、whyNow、whyItMatters、productAngles、contentWindow、missingData、riskNotes 必须使用中文',
+    );
+    expect(body.input[0].content[0].text).toContain(
+      '领域只能从固定集合中选择：AI、Technology、Politics & Elections、Geopolitics & Conflict、Macro & Financial Markets、Crypto & Web3、Prediction Markets、Official Schedule',
+    );
+    expect(body.input[0].content[0].text).toContain('goal.evidenceMemory.enrichedPackages');
   });
 
   it('throws a domain error when the API fails', async () => {

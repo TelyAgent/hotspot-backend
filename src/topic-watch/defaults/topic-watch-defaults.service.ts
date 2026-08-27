@@ -161,13 +161,13 @@ function createEvidenceRequirements(): Prisma.InputJsonValue {
 
 function createRefreshPolicy(): Prisma.InputJsonValue {
   return {
-    intervalMinutes: 120,
-    lookbackMinutes: 120,
+    intervalMinutes: 180,
+    lookbackMinutes: 180,
   } as Prisma.InputJsonValue;
 }
 
 function createCollectionPolicy(accounts: DefaultTopicWatchAccountConfig[]) {
-  return `每 2 小时增量采集重点账号近期帖子，默认账号：${accounts.map((account) => normalizeHandle(account.handle)).join('、')}。`;
+  return `每 3 小时增量采集重点账号近期帖子，默认账号：${accounts.map((account) => normalizeHandle(account.handle)).join('、')}。`;
 }
 
 function createTriggerPolicy(config: { positiveExamples: string[] }) {

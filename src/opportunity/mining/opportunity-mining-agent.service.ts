@@ -3,6 +3,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import { JsonObject } from '../../common/types/json.type';
 import { AGENT_WORKFLOW_ENGINE } from '../../agent/agent.tokens';
 import { AgentWorkflowEngine } from '../../agent/workflow-engine/agent-workflow-engine.interface';
+import { EnrichedEvidencePackage } from '../../signal/enrichment/signal-evidence-enrichment.types';
 import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { Signal } from '../../signal/signal/signal.types';
 import { TopicCandidate } from '../../topic-watch/topic-watch.types';
@@ -26,6 +27,7 @@ export class OpportunityMiningAgentService {
     memory: {
       signals?: Signal[];
       evidence?: EvidenceItem[];
+      enrichedPackages?: EnrichedEvidencePackage[];
       topicCandidates?: TopicCandidate[];
     } = {},
   ): Promise<OpportunityMiningDecision> {
@@ -37,6 +39,7 @@ export class OpportunityMiningAgentService {
     memory: {
       signals?: Signal[];
       evidence?: EvidenceItem[];
+      enrichedPackages?: EnrichedEvidencePackage[];
       topicCandidates?: TopicCandidate[];
     } = {},
   ): Promise<OpportunityMiningAgentResult> {
@@ -54,6 +57,9 @@ export class OpportunityMiningAgentService {
         evidenceMemory: {
           signals: (memory.signals ?? []).map((signal) => this.serializeSignal(signal)),
           evidence: (memory.evidence ?? []).map((item) => this.serializeEvidence(item)),
+          enrichedPackages: (memory.enrichedPackages ?? []).map((item) =>
+            this.serializeEnrichedEvidencePackage(item),
+          ),
           topicCandidates: (memory.topicCandidates ?? []).map((candidate) =>
             this.serializeTopicCandidate(candidate),
           ),
@@ -125,6 +131,8 @@ export class OpportunityMiningAgentService {
   }
 
   private parseDecision(value: JsonObject): OpportunityMiningDecision {
+    const decisionValue =
+      isJsonObject(value.decision) ? value.decision : value;
     const required = [
       'decision',
       'title',
@@ -140,8 +148,13 @@ export class OpportunityMiningAgentService {
       'riskNotes',
     ];
 
+    const normalized = {
+      ...this.createSafeDecisionDefaults(decisionValue),
+      ...decisionValue,
+    };
+
     for (const key of required) {
-      if (!(key in value)) {
+      if (!(key in normalized)) {
         throw new DomainError(
           `Opportunity mining decision missing field: ${key}`,
           'OPPORTUNITY_MINING_DECISION_INVALID',
@@ -150,7 +163,45 @@ export class OpportunityMiningAgentService {
       }
     }
 
-    return value as unknown as OpportunityMiningDecision;
+    return normalized as unknown as OpportunityMiningDecision;
+  }
+
+  private createSafeDecisionDefaults(value: JsonObject): Partial<OpportunityMiningDecision> {
+    const decision = typeof value.decision === 'string' ? value.decision : '';
+    const canUseSafeDefaults =
+      decision === 'ignore' ||
+      decision === 'request_human_review' ||
+      decision === 'create_insight';
+    if (!canUseSafeDefaults) {
+      return {};
+    }
+
+    const title = typeof value.title === 'string' && value.title.trim()
+      ? value.title
+      : '证据不足';
+    const summary = typeof value.summary === 'string' && value.summary.trim()
+      ? value.summary
+      : '当前证据不足，暂不形成正式热点事件。';
+
+    return {
+      title,
+      opportunityType: 'unknown',
+      summary,
+      whyNow:
+        typeof value.whyNow === 'string' && value.whyNow.trim()
+          ? value.whyNow
+          : summary,
+      whyItMatters:
+        typeof value.whyItMatters === 'string' && value.whyItMatters.trim()
+          ? value.whyItMatters
+          : '证据不足，暂不建议进入事件响应。',
+      productAngles: [],
+      contentWindow: '观察中',
+      confidence: 'low',
+      evidenceRefs: [],
+      missingData: [],
+      riskNotes: [],
+    };
   }
 
   private serializeSignal(signal: Signal): JsonObject {
@@ -179,6 +230,20 @@ export class OpportunityMiningAgentService {
     };
   }
 
+  private serializeEnrichedEvidencePackage(
+    item: EnrichedEvidencePackage,
+  ): JsonObject {
+    return {
+      signalId: item.signalId,
+      signalType: item.signalType,
+      evidenceRefs: item.evidenceRefs,
+      qualityGate: this.toJsonObject(item.qualityGate),
+      conservativeTitle: item.conservativeTitle ?? null,
+      domainLabels: item.domainLabels.map((label) => this.toJsonObject(label)),
+      enrichmentSummary: item.enrichmentSummary,
+    };
+  }
+
   private serializeTopicCandidate(candidate: TopicCandidate): JsonObject {
     return {
       id: candidate.id,
@@ -195,4 +260,8 @@ export class OpportunityMiningAgentService {
   private toJsonObject(value: unknown): JsonObject {
     return value as JsonObject;
   }
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

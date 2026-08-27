@@ -3,10 +3,25 @@ import { JsonObject } from '../../common/types/json.type';
 import { PrismaService } from '../../database/prisma.service';
 import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { EventLabel } from '../opportunity.types';
+import { EventDomainLabelService } from './event-domain-label.service';
+
+const FIXED_SOURCE_HEAT_LABELS = new Set([
+  'X Trend',
+  'Topic Circle',
+  'Future Event',
+  'Top5',
+  'Fast Rising',
+  'Multi-region',
+  '第一方确认',
+  'Re-entry',
+]);
 
 @Injectable()
 export class EventLabelingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventDomainLabelService: EventDomainLabelService,
+  ) {}
 
   async buildLabels(input: { evidence: EvidenceItem[] }): Promise<EventLabel[]> {
     const labels: EventLabel[] = [];
@@ -14,7 +29,12 @@ export class EventLabelingService {
     labels.push(...(await this.buildXTrendTriggerLabels(input.evidence)));
     labels.push(...(await this.buildTopicCircleTriggerLabels(input.evidence)));
     labels.push(...this.buildFutureEventTriggerLabels(input.evidence));
-    return labels;
+    labels.push(
+      ...this.eventDomainLabelService.buildDomainLabels({
+        evidence: input.evidence,
+      }),
+    );
+    return labels.filter((label) => label.category === 'domain' || FIXED_SOURCE_HEAT_LABELS.has(label.code));
   }
 
   private buildSourceLabels(evidence: EvidenceItem[]): EventLabel[] {
@@ -25,15 +45,20 @@ export class EventLabelingService {
       groups.set(sourcePath, [...(groups.get(sourcePath) ?? []), item]);
     });
 
-    return Array.from(groups.entries()).map(([sourcePath, items]) => ({
-      code: sourcePath,
-      name: sourcePathName(sourcePath),
-      category: 'source',
-      sourcePath,
-      evidenceRefs: items.map((item) => item.id),
-      reason: `事件包含 ${sourcePathName(sourcePath)} 的真实证据。`,
-      confidence: 'high',
-    }));
+    return Array.from(groups.entries())
+      .flatMap(([sourcePath, items]) => {
+        const label = sourcePathLabel(sourcePath);
+        if (!label) return [];
+        return [{
+          code: label,
+          name: label,
+          category: 'source',
+          sourcePath,
+          evidenceRefs: items.map((item) => item.id),
+          reason: `事件包含 ${label} 的真实证据。`,
+          confidence: 'high',
+        } satisfies EventLabel];
+      });
   }
 
   private async buildXTrendTriggerLabels(evidence: EvidenceItem[]): Promise<EventLabel[]> {
@@ -46,8 +71,8 @@ export class EventLabelingService {
     });
     if (top5Evidence.length > 0) {
       labels.push({
-        code: 'x_trend_top_5',
-        name: 'Top 5',
+        code: 'Top5',
+        name: 'Top5',
         category: 'trigger',
         sourcePath: 'x_trend',
         evidenceRefs: top5Evidence.map((item) => item.id),
@@ -59,7 +84,7 @@ export class EventLabelingService {
     const fastRisingEvidence = await this.findFastRisingEvidence(xTrendEvidence);
     if (fastRisingEvidence.length > 0) {
       labels.push({
-        code: 'x_trend_fast_rising',
+        code: 'Fast Rising',
         name: 'Fast Rising',
         category: 'trigger',
         sourcePath: 'x_trend',
@@ -72,8 +97,8 @@ export class EventLabelingService {
     const regions = distinctMetadataValues(xTrendEvidence, 'region');
     if (regions.length >= 2) {
       labels.push({
-        code: 'x_trend_multi_region',
-        name: '多地区上榜',
+        code: 'Multi-region',
+        name: 'Multi-region',
         category: 'trigger',
         sourcePath: 'x_trend',
         evidenceRefs: xTrendEvidence.map((item) => item.id),
@@ -149,7 +174,7 @@ export class EventLabelingService {
 
       if (account.singleTriggerPolicy === 'S1') {
         labels.push({
-          code: 'first_party_confirmed',
+          code: '第一方确认',
           name: '第一方确认',
           category: 'trigger',
           sourcePath: 'topic_circle',
@@ -159,55 +184,14 @@ export class EventLabelingService {
         });
       }
 
-      if (account.singleTriggerPolicy === 'S2') {
-        labels.push({
-          code: 'key_person_confirmed',
-          name: '核心人物确认',
-          category: 'trigger',
-          sourcePath: 'topic_circle',
-          evidenceRefs: [item.id],
-          reason: `@${account.handle} 是 S2 核心人物与决策者，权威范围：${account.authorityScope}`,
-          confidence: 'high',
-        });
-      }
+      // S2 等账号角色只参与事件判断和证据解释，不作为固定来源/热度筛选标签输出。
     }
 
     return dedupeLabels(labels);
   }
 
-  private buildFutureEventTriggerLabels(evidence: EvidenceItem[]): EventLabel[] {
-    const futureEvidence = evidence.filter((item) => sourceTypeToSourcePath(item.sourceType) === 'future_event');
-    if (!futureEvidence.length) return [];
-
-    const labels: EventLabel[] = [
-      {
-        code: 'future_event_official_schedule',
-        name: '官方日程确认',
-        category: 'trigger',
-        sourcePath: 'future_event',
-        evidenceRefs: futureEvidence.map((item) => item.id),
-        reason: '事件证据来自 Future Event 官方或准官方日程源。',
-        confidence: 'high',
-      },
-    ];
-
-    const actionScoreEvidence = futureEvidence.filter((item) => {
-      const actionScore = getMetadataNumber(item.metadata, 'actionScore');
-      return typeof actionScore === 'number' && actionScore >= 80;
-    });
-    if (actionScoreEvidence.length > 0) {
-      labels.push({
-        code: 'future_event_action_score_80',
-        name: 'Action Score 80+',
-        category: 'trigger',
-        sourcePath: 'future_event',
-        evidenceRefs: actionScoreEvidence.map((item) => item.id),
-        reason: 'Future Event Action Score 达到 80 分以上。',
-        confidence: 'high',
-      });
-    }
-
-    return labels;
+  private buildFutureEventTriggerLabels(_evidence: EvidenceItem[]): EventLabel[] {
+    return [];
   }
 }
 
@@ -234,14 +218,13 @@ function sourceTypeToSourcePath(sourceType: string) {
   return null;
 }
 
-function sourcePathName(sourcePath: string) {
+function sourcePathLabel(sourcePath: string) {
   const names: Record<string, string> = {
-    x_trend: 'X 热搜',
-    topic_circle: '关注圈层',
+    x_trend: 'X Trend',
+    topic_circle: 'Topic Circle',
     future_event: 'Future Event',
-    youtube: 'YouTube',
   };
-  return names[sourcePath] ?? sourcePath;
+  return names[sourcePath] ?? null;
 }
 
 function hasFastRisingEvidence(item: EvidenceItem) {

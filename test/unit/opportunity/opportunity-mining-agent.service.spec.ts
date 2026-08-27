@@ -96,6 +96,27 @@ describe('OpportunityMiningAgentService', () => {
       },
       {
         evidence: [createEvidence()],
+        enrichedPackages: [
+          {
+            signalId: 'sig_1',
+            signalType: 'x_trend',
+            evidenceRefs: ['ev_1'],
+            evidenceItems: [],
+            qualityGate: {
+              level: 'thin',
+              canCreateEvent: false,
+              canUseHighConfidence: false,
+              hasOpenableSource: true,
+              hasReasonEvidence: false,
+              hasActorActionObject: false,
+              missingData: ['缺少解释热搜原因的相关帖子或外部来源。'],
+              riskNotes: ['当前只有热搜榜信号，不能直接当成现实事件事实。'],
+            },
+            conservativeTitle: 'United States X 热搜：OpenAI',
+            domainLabels: [],
+            enrichmentSummary: '缺少解释热搜原因的相关帖子或外部来源。',
+          },
+        ],
       },
     );
 
@@ -113,6 +134,15 @@ describe('OpportunityMiningAgentService', () => {
             evidence: [
               expect.objectContaining({
                 id: 'ev_1',
+              }),
+            ],
+            enrichedPackages: [
+              expect.objectContaining({
+                signalId: 'sig_1',
+                qualityGate: expect.objectContaining({
+                  canCreateEvent: false,
+                }),
+                conservativeTitle: 'United States X 热搜：OpenAI',
               }),
             ],
           }),
@@ -152,6 +182,45 @@ describe('OpportunityMiningAgentService', () => {
 
     expect(result.decision).toBe('request_human_review');
     expect(result.missingData).toEqual(['缺少官方来源']);
+  });
+
+  it('normalizes nested decisions and fills safe defaults for optional model omissions', async () => {
+    const workflowEngine = {
+      run: jest.fn(() =>
+        Promise.resolve({
+          runId: 'run_1',
+          status: 'succeeded',
+          result: {
+            decision: {
+              decision: 'ignore',
+              title: '证据不足',
+              summary: '当前只有热搜关键词，不能确认具体事件。',
+              whyNow: '热搜榜出现该关键词。',
+              whyItMatters: '证据不足，暂不形成事件。',
+              evidenceRefs: ['ev_1'],
+            },
+          },
+        }),
+      ),
+    } as unknown as AgentWorkflowEngine;
+    const service = createService(workflowEngine);
+
+    const result = await service.evaluate({
+      instruction: '判断是否形成机会。',
+      evidence: [createEvidence()],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        decision: 'ignore',
+        opportunityType: 'unknown',
+        productAngles: [],
+        contentWindow: '观察中',
+        confidence: 'low',
+        missingData: [],
+        riskNotes: [],
+      }),
+    );
   });
 
   it('rejects create_opportunity decisions without evidence refs', async () => {

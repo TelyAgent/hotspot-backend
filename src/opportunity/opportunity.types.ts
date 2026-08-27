@@ -43,7 +43,7 @@ export interface EventListResult {
   pageSize: number;
 }
 
-export type EventLabelCategory = 'source' | 'trigger' | 'aggregation';
+export type EventLabelCategory = 'source' | 'trigger' | 'aggregation' | 'domain';
 
 export interface EventLabel {
   code: string;
