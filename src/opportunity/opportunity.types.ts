@@ -30,6 +30,7 @@ export interface Event {
   missingData: string[];
   riskNotes: string[];
   labels?: EventLabel[] | null;
+  triggerReasons?: EventTriggerReason[];
   confidence: OpportunityConfidence;
   status: 'suggested' | 'confirmed' | 'ignored' | 'archived';
   createdAt: Date;
@@ -53,6 +54,13 @@ export interface EventLabel {
   evidenceRefs: string[];
   reason: string;
   confidence: OpportunityConfidence;
+}
+
+export interface EventTriggerReason {
+  code: string;
+  text: string;
+  evidenceRefs: string[];
+  sourcePath: string;
 }
 
 export interface OpportunityRulePackRecord {

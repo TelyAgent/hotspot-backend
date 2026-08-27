@@ -9,6 +9,7 @@ import { OpportunityMiningOrchestratorService } from './mining/opportunity-minin
 import { OpportunityMiningSchedulerService } from './mining/opportunity-mining-scheduler.service';
 import { OpportunityRepository } from './opportunity.repository';
 import { OpportunityRulePackGovernanceService } from './rule-pack/opportunity-rule-pack-governance.service';
+import { EventTriggerReasonService } from './trigger-reason/event-trigger-reason.service';
 
 @Controller('opportunities')
 export class OpportunityController {
@@ -17,6 +18,7 @@ export class OpportunityController {
     private readonly miningOrchestrator: OpportunityMiningOrchestratorService,
     private readonly miningScheduler: OpportunityMiningSchedulerService,
     private readonly rulePackGovernance: OpportunityRulePackGovernanceService,
+    private readonly triggerReasonService: EventTriggerReasonService,
   ) {}
 
   @Get()
@@ -28,18 +30,22 @@ export class OpportunityController {
   }
 
   @Get('events')
-  listEvents(
+  async listEvents(
     @Query('status') status?: string,
     @Query('label') label?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    return this.opportunityRepository.listEvents({
+    const result = await this.opportunityRepository.listEvents({
       status,
       label,
       page: parsePage(page),
       pageSize: parsePageSize(pageSize),
     });
+    return {
+      ...result,
+      items: await this.triggerReasonService.attachTriggerReasons(result.items),
+    };
   }
 
   @Get('rule-pack')

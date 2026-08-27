@@ -14,6 +14,7 @@ import { EventLabelingService } from './labeling/event-labeling.service';
 import { EventDomainLabelService } from './labeling/event-domain-label.service';
 import { OpportunityRulePackGovernanceService } from './rule-pack/opportunity-rule-pack-governance.service';
 import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-pack-loader.service';
+import { EventTriggerReasonService } from './trigger-reason/event-trigger-reason.service';
 
 @Module({
   imports: [AgentModule, EventMergeModule, SignalEvidenceEnrichmentModule],
@@ -28,6 +29,7 @@ import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-p
     OpportunityMiningSignalSelectorService,
     EventDomainLabelService,
     EventLabelingService,
+    EventTriggerReasonService,
     OpportunityRulePackGovernanceService,
     OpportunityRulePackLoaderService,
   ],
@@ -38,6 +40,7 @@ import { OpportunityRulePackLoaderService } from './rule-pack/opportunity-rule-p
     OpportunityMiningSignalSelectorService,
     EventDomainLabelService,
     EventLabelingService,
+    EventTriggerReasonService,
     OpportunityRulePackGovernanceService,
     OpportunityRulePackLoaderService,
   ],

@@ -6,6 +6,7 @@ import { OpportunityMiningSchedulerService } from '../../src/opportunity/mining/
 import { OpportunityController } from '../../src/opportunity/opportunity.controller';
 import { OpportunityRepository } from '../../src/opportunity/opportunity.repository';
 import { OpportunityRulePackGovernanceService } from '../../src/opportunity/rule-pack/opportunity-rule-pack-governance.service';
+import { EventTriggerReasonService } from '../../src/opportunity/trigger-reason/event-trigger-reason.service';
 
 describe('Opportunity API', () => {
   let app: INestApplication;
@@ -13,6 +14,7 @@ describe('Opportunity API', () => {
   let orchestrator: jest.Mocked<Partial<OpportunityMiningOrchestratorService>>;
   let scheduler: jest.Mocked<Partial<OpportunityMiningSchedulerService>>;
   let rulePackGovernance: jest.Mocked<Partial<OpportunityRulePackGovernanceService>>;
+  let triggerReasonService: jest.Mocked<Partial<EventTriggerReasonService>>;
 
   beforeEach(async () => {
     repository = {
@@ -166,6 +168,23 @@ describe('Opportunity API', () => {
         } as never),
       ),
     };
+    triggerReasonService = {
+      attachTriggerReasons: jest.fn((events) =>
+        Promise.resolve(
+          events.map((event) => ({
+            ...event,
+            triggerReasons: [
+              {
+                code: 'TR-01',
+                text: 'TR-01：首次进入输入榜单前 10，United States 当前排名第 4。',
+                evidenceRefs: ['ev_rank'],
+                sourcePath: 'x_trend',
+              },
+            ],
+          })),
+        ) as never,
+      ),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [OpportunityController],
@@ -185,6 +204,10 @@ describe('Opportunity API', () => {
         {
           provide: OpportunityRulePackGovernanceService,
           useValue: rulePackGovernance,
+        },
+        {
+          provide: EventTriggerReasonService,
+          useValue: triggerReasonService,
         },
       ],
     }).compile();
@@ -221,11 +244,24 @@ describe('Opportunity API', () => {
       page: 2,
       pageSize: 10,
     });
+    expect(triggerReasonService.attachTriggerReasons).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'event_1',
+      }),
+    ]);
     expect(response.body).toEqual({
       items: [
         expect.objectContaining({
           id: 'event_1',
           title: 'Top 5 事件',
+          triggerReasons: [
+            {
+              code: 'TR-01',
+              text: 'TR-01：首次进入输入榜单前 10，United States 当前排名第 4。',
+              evidenceRefs: ['ev_rank'],
+              sourcePath: 'x_trend',
+            },
+          ],
         }),
       ],
       total: 1,
