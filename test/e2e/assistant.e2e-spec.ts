@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
+import { DomainError } from '../../src/common/errors/domain-error';
 import { AssistantController } from '../../src/assistant/assistant.controller';
 import { AssistantService } from '../../src/assistant/assistant.service';
 
@@ -105,6 +106,37 @@ describe('Assistant API', () => {
         result: expect.objectContaining({
           limit: 30,
         }),
+      }),
+    );
+  });
+
+  it('returns bad request for assistant domain errors', async () => {
+    assistantService.executeTool = jest.fn(() => {
+      throw new DomainError(
+        'Topic watch not found.',
+        'TOPIC_WATCH_NOT_FOUND',
+        {
+          topicName: '不存在的主题',
+        },
+      );
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/assistant/tool-executions')
+      .send({
+        tool: 'add_twitter_topic_account',
+        arguments: {
+          topicName: '不存在的主题',
+          handle: '@Jason',
+        },
+      })
+      .expect(400);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        statusCode: 400,
+        message: 'Topic watch not found.',
+        code: 'TOPIC_WATCH_NOT_FOUND',
       }),
     );
   });

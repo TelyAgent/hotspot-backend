@@ -1,4 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, HttpException, HttpStatus, Post } from '@nestjs/common';
+import { DomainError } from '../common/errors/domain-error';
 import { JsonObject } from '../common/types/json.type';
 import { AssistantService } from './assistant.service';
 import {
@@ -21,18 +22,30 @@ export class AssistantController {
   }
 
   @Post('tool-executions')
-  executeTool(
+  async executeTool(
     @Body() body: Record<string, unknown>,
   ): Promise<AssistantToolExecutionResponse> {
-    return this.assistantService.executeTool({
-      tool: String(body.tool ?? '') as AssistantToolName,
-      arguments:
-        typeof body.arguments === 'object' &&
-        body.arguments !== null &&
-        !Array.isArray(body.arguments)
-          ? (body.arguments as JsonObject)
-          : {},
-    });
+    try {
+      return await this.assistantService.executeTool({
+        tool: String(body.tool ?? '') as AssistantToolName,
+        arguments:
+          typeof body.arguments === 'object' &&
+          body.arguments !== null &&
+          !Array.isArray(body.arguments)
+            ? (body.arguments as JsonObject)
+            : {},
+      });
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw new HttpException({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        }, HttpStatus.BAD_REQUEST);
+      }
+      throw error;
+    }
   }
 }
 

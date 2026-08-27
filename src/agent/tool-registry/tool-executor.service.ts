@@ -114,6 +114,10 @@ export class ToolExecutorService {
     }
 
     if (this.isJsonObject(output) && Array.isArray(output.items)) {
+      if (fields.includes('items')) {
+        return this.pickFields(output, fields);
+      }
+
       return {
         ...output,
         items: output.items.map((item) => this.pickFields(item, fields)),

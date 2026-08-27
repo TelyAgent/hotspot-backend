@@ -247,6 +247,59 @@ export class CoreAgentToolsService implements OnModuleInit {
 
   private registerXTrendTools(): void {
     this.toolRegistry.register({
+      name: 'xTrend.getLatestRanking',
+      description:
+        '读取指定地区最新一次 X/Twitter 热搜榜快照，适合回答当前热搜排行、前 N 名、榜单列表等问题。',
+      permission: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          region: { type: 'string' },
+          limit: { type: 'number' },
+        },
+      },
+      fieldSelection: this.fieldSelection([
+        'region',
+        'observedAt',
+        'items',
+      ]),
+      execute: async (input) => {
+        const region = this.normalizeXTrendRegion(input.region);
+        const snapshot = await this.prisma.xTrendSnapshot.findFirst({
+          where: {
+            region,
+          },
+          orderBy: {
+            observedAt: 'desc',
+          },
+          include: {
+            items: {
+              orderBy: {
+                rank: 'asc',
+              },
+              take: this.parseTake(input.limit, 10),
+            },
+          },
+        });
+
+        return this.toJson({
+          region,
+          observedAt: snapshot?.observedAt ?? null,
+          items:
+            snapshot?.items.map((item) => ({
+              id: item.id,
+              name: item.name,
+              query: item.query,
+              rank: item.rank,
+              url: item.url,
+              heat: item.heat,
+              category: item.category,
+            })) ?? [],
+        });
+      },
+    });
+
+    this.toolRegistry.register({
       name: 'xTrend.getRecentDiffs',
       description:
         '按热搜 query 查询最近的 X 热榜快照差异，用于判断是否新进榜、排名上升或下降。',
@@ -524,6 +577,61 @@ export class CoreAgentToolsService implements OnModuleInit {
 
   private registerTopicWatchTools(): void {
     this.toolRegistry.register({
+      name: 'topicWatch.list',
+      description:
+        '读取全部重点主题/主题圈配置，包含状态、领域、监控意图和启用监控账号概要。适合回答“配置了哪些主题圈”“每个主题有哪些账号”等运营问题。',
+      permission: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          take: { type: 'number' },
+        },
+      },
+      fieldSelection: this.fieldSelection([
+        'id',
+        'name',
+        'description',
+        'domains',
+        'watchIntent',
+        'collectionPolicy',
+        'triggerPolicy',
+        'evidencePolicy',
+        'exclusionPolicy',
+        'status',
+        'accounts',
+        'updatedAt',
+      ]),
+      execute: async (input) => {
+        const items = await this.prisma.topicWatch.findMany({
+          take: this.parseTake(input.take, 50),
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          include: {
+            accounts: {
+              where: {
+                status: 'active',
+              },
+              orderBy: {
+                sortOrder: 'asc',
+              },
+              select: {
+                handle: true,
+                primaryRole: true,
+                singleTriggerPolicy: true,
+                authorityScope: true,
+                status: true,
+                sortOrder: true,
+              },
+            },
+          },
+        });
+
+        return this.toJson({ items });
+      },
+    });
+
+    this.toolRegistry.register({
       name: 'topicWatch.listActive',
       description:
         '读取当前启用的重点主题配置，用于判断热搜语义是否命中已配置重点主题。',
@@ -797,6 +905,17 @@ export class CoreAgentToolsService implements OnModuleInit {
     }
 
     return Math.min(Math.trunc(parsed), 50);
+  }
+
+  private normalizeXTrendRegion(value: JsonValue | undefined): string {
+    const region = this.optionalString(value) ?? 'global';
+    const normalized = region.trim().toLowerCase();
+
+    if (normalized === 'worldwide' || normalized === 'world' || normalized === '全球') {
+      return 'global';
+    }
+
+    return region;
   }
 
   private toJson(value: unknown): JsonValue {

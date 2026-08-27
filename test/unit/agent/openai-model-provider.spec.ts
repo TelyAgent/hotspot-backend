@@ -160,6 +160,113 @@ describe('OpenAiModelProvider', () => {
     );
   });
 
+  it('instructs assistant agent to plan configuration edits before querying runtime data', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            type: 'final_decision',
+            decision: {
+              message: '需要先确认配置变更。',
+              proposedActions: [],
+            },
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await provider.completeStructured({
+      ...createInput(),
+      agentType: 'assistant',
+      goal: {
+        message: '预测市场行业添加监控账号 @Jason',
+      },
+      availableTools: [
+        {
+          name: 'topicWatch.list',
+          description: '读取全部重点主题配置。',
+          permission: 'read' as const,
+          execute: jest.fn(),
+        },
+        {
+          name: 'signal.getRecent',
+          description: '读取最近信号。',
+          permission: 'read' as const,
+          execute: jest.fn(),
+        },
+      ],
+    });
+
+    const body = JSON.parse(
+      String((global.fetch as jest.Mock).mock.calls[0][1].body),
+    ) as { input: Array<{ content: Array<{ text: string }> }> };
+    expect(body.input[0].content[0].text).toContain(
+      '配置编辑：如果用户要求添加、删除、修改主题圈或监控账号，必须先调用 topicWatch.list 或 topicWatch.get 找到目标配置',
+    );
+    expect(body.input[0].content[0].text).toContain(
+      '不要把无关的最近信号当作答案',
+    );
+    expect(body.input[0].content[0].text).toContain('proposedActions');
+  });
+
+  it('instructs assistant agent to use latest ranking tool for x trend ranking questions', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        createResponse({
+          output_text: JSON.stringify({
+            type: 'final_decision',
+            decision: {
+              message: '已读取最新热搜。',
+              proposedActions: [],
+            },
+          }),
+        }),
+      ),
+    ) as never;
+    const provider = new OpenAiModelProvider(
+      createConfig({
+        OPENAI_API_KEY: 'test-key',
+      }),
+    );
+
+    await provider.completeStructured({
+      ...createInput(),
+      agentType: 'assistant',
+      goal: {
+        message: 'twitter的热搜排行前五有哪些',
+      },
+      availableTools: [
+        {
+          name: 'xTrend.getLatestRanking',
+          description: '读取指定地区最新一次 X/Twitter 热搜榜快照。',
+          permission: 'read' as const,
+          execute: jest.fn(),
+        },
+        {
+          name: 'signal.getRecent',
+          description: '读取最近信号。',
+          permission: 'read' as const,
+          execute: jest.fn(),
+        },
+      ],
+    });
+
+    const body = JSON.parse(
+      String((global.fetch as jest.Mock).mock.calls[0][1].body),
+    ) as { input: Array<{ content: Array<{ text: string }> }> };
+    expect(body.input[0].content[0].text).toContain(
+      '热搜排行查询：如果用户问 Twitter/X 热搜榜、热榜、排行、前 N 名、当前榜单，必须优先调用 xTrend.getLatestRanking',
+    );
+    expect(body.input[0].content[0].text).toContain(
+      '不要用 signal.getRecent 或 xTrend.getRecentDiffs 代替当前榜单',
+    );
+  });
+
   it('throws a domain error when the API fails', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve(

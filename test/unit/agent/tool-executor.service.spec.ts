@@ -81,6 +81,58 @@ describe('ToolExecutorService', () => {
     });
   });
 
+  it('keeps nested items intact when top-level items field is requested', async () => {
+    const registry = new ToolRegistryService();
+    registry.register({
+      name: 'xTrend.getLatestRanking',
+      description: 'Get latest x trend ranking.',
+      permission: 'read',
+      fieldSelection: {
+        supported: true,
+        allowedFields: ['region', 'observedAt', 'items'],
+        defaultFields: ['region', 'observedAt', 'items'],
+      },
+      execute: jest.fn(() =>
+        Promise.resolve({
+          region: 'global',
+          observedAt: '2026-08-26T07:17:17.684Z',
+          items: [
+            {
+              rank: 1,
+              name: '#YourtuberQ2',
+              query: '#YourtuberQ2',
+            },
+          ],
+        }),
+      ),
+    });
+    const runLog = {
+      recordToolCall: jest.fn(() => Promise.resolve()),
+    } as unknown as AgentRunLogService;
+    const executor = new ToolExecutorService(registry, runLog);
+
+    const result = await executor.execute({
+      runId: 'run_1',
+      toolName: 'xTrend.getLatestRanking',
+      arguments: {
+        region: 'global',
+      },
+      requestedFields: ['region', 'observedAt', 'items'],
+    });
+
+    expect(result.output).toEqual({
+      region: 'global',
+      observedAt: '2026-08-26T07:17:17.684Z',
+      items: [
+        {
+          rank: 1,
+          name: '#YourtuberQ2',
+          query: '#YourtuberQ2',
+        },
+      ],
+    });
+  });
+
   it('rejects requested fields outside the tool allowlist', async () => {
     const registry = new ToolRegistryService();
     registry.register({

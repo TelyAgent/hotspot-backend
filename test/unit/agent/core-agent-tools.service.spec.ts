@@ -16,6 +16,7 @@ describe('CoreAgentToolsService', () => {
       'signal.search',
       'signal.getRecent',
       'signal.getById',
+      'xTrend.getLatestRanking',
       'xTrend.getRecentDiffs',
       'xTrend.getCrossRegionPresence',
       'evidence.search',
@@ -24,6 +25,7 @@ describe('CoreAgentToolsService', () => {
       'opportunity.getById',
       'event.findSimilar',
       'event.getById',
+      'topicWatch.list',
       'topicWatch.listActive',
       'topicWatch.get',
       'topicWatch.getCandidates',
@@ -113,6 +115,119 @@ describe('CoreAgentToolsService', () => {
         },
       ],
     });
+  });
+
+  it('executes xTrend.getLatestRanking from latest snapshot items', async () => {
+    const registry = new ToolRegistryService();
+    const prisma = {
+      xTrendSnapshot: {
+        findFirst: jest.fn(() =>
+          Promise.resolve({
+            id: 'snapshot_1',
+            region: 'global',
+            observedAt: new Date('2026-08-26T07:17:17.684Z'),
+            items: [
+              {
+                id: 'item_1',
+                name: '#YourtuberQ2',
+                query: '#YourtuberQ2',
+                rank: 1,
+                url: 'https://x.com/search?q=%23YourtuberQ2',
+                heat: null,
+                category: null,
+              },
+              {
+                id: 'item_2',
+                name: 'Happy Onam',
+                query: '"Happy Onam"',
+                rank: 2,
+                url: 'https://x.com/search?q=%22Happy%20Onam%22',
+                heat: null,
+                category: null,
+              },
+            ],
+          }),
+        ),
+      },
+    } as unknown as PrismaService;
+    const service = new CoreAgentToolsService(registry, prisma);
+
+    service.onModuleInit();
+    const output = await registry.get('xTrend.getLatestRanking').execute({
+      region: 'global',
+      limit: 5,
+    });
+
+    expect(prisma.xTrendSnapshot.findFirst).toHaveBeenCalledWith({
+      where: {
+        region: 'global',
+      },
+      orderBy: {
+        observedAt: 'desc',
+      },
+      include: {
+        items: {
+          orderBy: {
+            rank: 'asc',
+          },
+          take: 5,
+        },
+      },
+    });
+    expect(output).toEqual({
+      region: 'global',
+      observedAt: '2026-08-26T07:17:17.684Z',
+      items: [
+        {
+          id: 'item_1',
+          name: '#YourtuberQ2',
+          query: '#YourtuberQ2',
+          rank: 1,
+          url: 'https://x.com/search?q=%23YourtuberQ2',
+          heat: null,
+          category: null,
+        },
+        {
+          id: 'item_2',
+          name: 'Happy Onam',
+          query: '"Happy Onam"',
+          rank: 2,
+          url: 'https://x.com/search?q=%22Happy%20Onam%22',
+          heat: null,
+          category: null,
+        },
+      ],
+    });
+  });
+
+  it('normalizes worldwide x trend ranking region to global', async () => {
+    const registry = new ToolRegistryService();
+    const prisma = {
+      xTrendSnapshot: {
+        findFirst: jest.fn(() =>
+          Promise.resolve({
+            id: 'snapshot_1',
+            region: 'global',
+            observedAt: new Date('2026-08-26T07:17:17.684Z'),
+            items: [],
+          }),
+        ),
+      },
+    } as unknown as PrismaService;
+    const service = new CoreAgentToolsService(registry, prisma);
+
+    service.onModuleInit();
+    await registry.get('xTrend.getLatestRanking').execute({
+      region: 'Worldwide',
+    });
+
+    expect(prisma.xTrendSnapshot.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          region: 'global',
+        },
+      }),
+    );
   });
 
   it('executes xTrend.getRecentDiffs against prisma', async () => {

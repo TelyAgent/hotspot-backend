@@ -210,6 +210,7 @@ model AgentRun {
 
   steps     AgentRunStep[]
   toolCalls AgentToolCall[]
+  copilotActions CopilotProposedAction[]
 
   @@index([agentType, startedAt])
   @@map("agent_runs")
@@ -249,6 +250,85 @@ model AgentToolCall {
   @@index([runId, startedAt])
   @@index([toolName, startedAt])
   @@map("agent_tool_calls")
+}
+
+model CopilotSession {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  client    String
+  title     String?
+  status    String   @default("active")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages CopilotMessage[]
+  actions  CopilotProposedAction[]
+
+  @@index([tenantId, userId, updatedAt])
+  @@map("copilot_sessions")
+}
+
+model CopilotMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  session CopilotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("copilot_messages")
+}
+
+model CopilotProposedAction {
+  id                   String    @id @default(cuid())
+  agentRunId           String
+  sessionId            String
+  tenantId             String
+  userId               String
+  tool                 String
+  summary              String
+  arguments            Json
+  status               String
+  requiresConfirmation Boolean   @default(true)
+  confirmedBy          String?
+  confirmedAt          DateTime?
+  executedAt           DateTime?
+  result               Json?
+  errorMessage         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  agentRun AgentRun       @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  session  CopilotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  audits   CopilotAuditLog[]
+
+  @@index([sessionId, status, createdAt])
+  @@index([tool, createdAt])
+  @@map("copilot_proposed_actions")
+}
+
+model CopilotAuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  actionId  String?
+  tool      String
+  operation String
+  before    Json?
+  after     Json?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  action CopilotProposedAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, userId, createdAt])
+  @@index([tool, createdAt])
+  @@map("copilot_audit_logs")
 }
 
 model OpportunityRulePack {
