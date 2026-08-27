@@ -80,8 +80,10 @@ export class FutureEventsPlugin implements DataSourcePlugin {
       }
     }
 
+    const dedupedItems = dedupeFutureSourceItems(items);
+
     return {
-      rawItems: items.map((item) => ({
+      rawItems: dedupedItems.map((item) => ({
         source: this.id,
         sourceType: 'future_event_source_item',
         sourceItemId: `${item.sourceType}:${item.sourceItemId}`,
@@ -97,7 +99,8 @@ export class FutureEventsPlugin implements DataSourcePlugin {
       })),
       summary: {
         sourceTypes: sources.map((source) => source.sourceType),
-        count: items.length,
+        count: dedupedItems.length,
+        duplicateCount: items.length - dedupedItems.length,
         errors,
       },
     };
@@ -268,6 +271,29 @@ function isInCurrentYearWindow(item: ParsedFutureSourceItem, now: Date) {
   );
   const startOfNextYear = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
   return startTime >= startOfToday && startTime < startOfNextYear;
+}
+
+function dedupeFutureSourceItems(items: ParsedFutureSourceItem[]) {
+  const seen = new Set<string>();
+  const deduped: ParsedFutureSourceItem[] = [];
+
+  for (const item of items) {
+    const key = [
+      item.sourceType,
+      normalizeDedupeText(item.title),
+      item.startTime ?? '',
+      item.endTime ?? '',
+    ].join(':');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  return deduped;
+}
+
+function normalizeDedupeText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 function isFutureSourceItem(value: unknown): value is ParsedFutureSourceItem {

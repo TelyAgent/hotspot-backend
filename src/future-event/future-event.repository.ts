@@ -13,6 +13,17 @@ import {
   FutureEventSourcePlan,
 } from './future-event.types';
 
+export interface FutureEventSignal {
+  id: string;
+  title: string;
+  summary?: string | null;
+  observedAt: Date;
+  metrics?: unknown;
+  metadata?: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class FutureEventRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -119,6 +130,19 @@ export class FutureEventRepository {
         createdAt: 'desc',
       },
     }) as unknown as Promise<FutureEventCandidate[]>;
+  }
+
+  async listFutureEventSignals(input: { take?: number } = {}): Promise<FutureEventSignal[]> {
+    return this.prisma.signal.findMany({
+      where: {
+        source: 'future-events',
+        signalType: 'future_event',
+      },
+      take: input.take ?? 500,
+      orderBy: {
+        observedAt: 'desc',
+      },
+    }) as unknown as Promise<FutureEventSignal[]>;
   }
 
   async findCandidateById(id: string): Promise<FutureEventCandidate | null> {

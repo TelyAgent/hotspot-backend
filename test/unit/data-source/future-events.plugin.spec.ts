@@ -206,6 +206,65 @@ describe('FutureEventsPlugin', () => {
       'FOMC meeting December 8-9, 2026',
     ]);
   });
+
+  it('collects only the current OPM holiday schedule section', async () => {
+    global.fetch = jest.fn(() =>
+      textResponse(
+        [
+          '<html><body>',
+          '<h2>2024 Holiday Schedule</h2>',
+          '<table>',
+          '<tr><td>Monday, October 14</td><td>Columbus Day</td></tr>',
+          '<tr><td>Thursday, November 28</td><td>Thanksgiving Day</td></tr>',
+          '</table>',
+          '<h2>2025 Holiday Schedule</h2>',
+          '<table>',
+          '<tr><td>Monday, October 13</td><td>Columbus Day</td></tr>',
+          '<tr><td>Thursday, November 27</td><td>Thanksgiving Day</td></tr>',
+          '</table>',
+          '<h2>2026 Holiday Schedule</h2>',
+          '<table>',
+          '<tr><td>Monday, September 7</td><td>Labor Day</td></tr>',
+          '<tr><td>Monday, October 12</td><td>Columbus Day</td></tr>',
+          '<tr><td>Thursday, November 26</td><td>Thanksgiving Day</td></tr>',
+          '</table>',
+          '</body></html>',
+        ].join('\n'),
+      ),
+    ) as unknown as typeof fetch;
+
+    const plugin = new FutureEventsPlugin();
+
+    const result = await plugin.collect({
+      capabilityId: 'future.events.discover',
+      params: {
+        sources: [
+          {
+            sourceType: 'opm',
+            variables: {
+              url: 'https://opm.test/holidays',
+            },
+          },
+        ],
+      },
+      context: {
+        jobId: 'future_source_plan_plan_1_official_macro',
+        capabilityId: 'future.events.discover',
+        observedAt: new Date('2026-08-25T00:00:00.000Z'),
+      },
+    });
+
+    expect(result.rawItems.map((item) => getPayloadTitle(item.payload))).toEqual([
+      'Labor Day',
+      'Columbus Day',
+      'Thanksgiving Day',
+    ]);
+    expect(result.rawItems.map((item) => getPayloadStartTime(item.payload))).toEqual([
+      '2026-09-07T00:00:00.000Z',
+      '2026-10-12T00:00:00.000Z',
+      '2026-11-26T00:00:00.000Z',
+    ]);
+  });
 });
 
 function textResponse(text: string): Promise<Response> {
@@ -222,5 +281,14 @@ function getPayloadTitle(payload: unknown) {
     !Array.isArray(payload) &&
     'title' in payload
     ? payload.title
+    : undefined;
+}
+
+function getPayloadStartTime(payload: unknown) {
+  return payload &&
+    typeof payload === 'object' &&
+    !Array.isArray(payload) &&
+    'startTime' in payload
+    ? payload.startTime
     : undefined;
 }

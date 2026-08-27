@@ -69,6 +69,33 @@ describe('FutureEvent API', () => {
           provide: FutureEventRepository,
           useValue: {
             listEvents: jest.fn(() => Promise.resolve([])),
+            listFutureEventSignals: jest.fn(() =>
+              Promise.resolve([
+                {
+                  id: 'signal_october_1',
+                  title: 'FOMC meeting October 27-28, 2026',
+                  summary: 'FOMC 官方日程中的未来事件。',
+                  observedAt: new Date('2026-08-27T06:36:40.941Z'),
+                  metrics: null,
+                  metadata: {
+                    sourceType: 'fomc',
+                    sourceItemId: 'fomc_2026_10',
+                    sourceUrl:
+                      'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
+                    subject: 'FOMC',
+                    eventType: 'policy_meeting',
+                    scheduledAt: '2026-10-27T00:00:00.000Z',
+                    startAt: '2026-10-27T00:00:00.000Z',
+                    timezone: 'UTC',
+                    confidence: 'high',
+                    confirmationLevel: 'confirmed',
+                    schedulePrecision: 'date',
+                  },
+                  createdAt: new Date('2026-08-27T06:36:40.941Z'),
+                  updatedAt: new Date('2026-08-27T06:36:40.941Z'),
+                },
+              ]),
+            ),
             updateCandidateStatus: jest.fn((input) =>
               Promise.resolve({
                 id: input.id,
@@ -179,7 +206,7 @@ describe('FutureEvent API', () => {
 
     expect(candidateService.listCandidates).toHaveBeenCalledWith({
       status: 'new',
-      take: 50,
+      take: 500,
     });
     expect(response.body).toEqual([
       expect.objectContaining({
@@ -187,6 +214,22 @@ describe('FutureEvent API', () => {
         title: 'CPI 发布',
         factTime: '2026-08-26T12:30:00.000Z',
         confirmationLevel: 'candidate',
+      }),
+    ]);
+  });
+
+  it('lists official source signals in the monthly calendar view when they are not candidates yet', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/future-events?month=2026-10')
+      .expect(200);
+
+    expect(response.body).toEqual([
+      expect.objectContaining({
+        id: 'signal_october_1',
+        title: 'FOMC meeting October 27-28, 2026',
+        factTime: '2026-10-27T00:00:00.000Z',
+        entryMode: 'source_signal',
+        confirmationLevel: 'confirmed',
       }),
     ]);
   });

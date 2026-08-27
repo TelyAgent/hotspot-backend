@@ -49,7 +49,7 @@ export function parseOpmHolidays(
   options: { retrievedAt: string; sourceUrl: string; now?: Date },
 ): ParsedFutureSourceItem[] {
   const year = (options.now ?? new Date()).getUTCFullYear();
-  return parseOpmRows(html, year)
+  return parseOpmRows(extractOpmYearSection(html, year), year)
     .map((row) => toHolidayItem(row, year, options))
     .filter((item): item is ParsedFutureSourceItem => Boolean(item));
 }
@@ -247,7 +247,7 @@ function toBeaItem(
 }
 
 function parseOpmRows(html: string, year: number) {
-  const section = extractYearSection(stripTags(html), year);
+  const section = stripTags(html);
   const rows: Array<{ dateText: string; title: string }> = [];
   const pattern =
     /((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2})(?:,?\s+\d{4})?\s*\*{0,3}\s+(.+?)(?=(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}|$)/gi;
@@ -262,6 +262,26 @@ function parseOpmRows(html: string, year: number) {
     }
   }
   return rows;
+}
+
+function extractOpmYearSection(html: string, year: number) {
+  const headingPattern = new RegExp(
+    `<h[1-6][^>]*>\\s*(?:<[^>]+>\\s*)*${year}\\s+Holiday\\s+Schedule[\\s\\S]*?<\\/h[1-6]>`,
+    'i',
+  );
+  const heading = headingPattern.exec(html);
+  if (!heading) {
+    return extractYearSection(stripTags(html), year);
+  }
+
+  const start = heading.index;
+  const rest = html.slice(start + heading[0].length);
+  const nextHeading = rest.search(
+    /<h[1-6][^>]*>[\s\S]*?\b\d{4}\s+Holiday\s+Schedule[\s\S]*?<\/h[1-6]>/i,
+  );
+  return nextHeading >= 0
+    ? html.slice(start, start + heading[0].length + nextHeading)
+    : html.slice(start);
 }
 
 function toHolidayItem(

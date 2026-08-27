@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { JsonObject } from '../common/types/json.type';
 import { parseTake } from '../common/utils/request.util';
 import { FutureEventCandidateService } from './candidate/future-event-candidate.service';
-import { FutureEventRepository } from './future-event.repository';
+import { FutureEventRepository, FutureEventSignal } from './future-event.repository';
 import { FutureEvent, FutureEventCandidate } from './future-event.types';
 import { FutureEventMonitoringAgentService } from './monitoring/future-event-monitoring-agent.service';
 import { FutureEventMonitoringExecutionService } from './monitoring/future-event-monitoring-execution.service';
@@ -45,16 +45,25 @@ export class FutureEventController {
       take: parsedTake,
     });
     const eventViews = events.map((event) => this.toScheduleView(event));
-
-    if (!month) {
-      return eventViews;
-    }
-
     const candidates = await this.candidateService.listCandidates({
       status: 'new',
-      take: parsedTake,
+      take: month ? 500 : parsedTake,
     });
-    return [...eventViews, ...candidates.map((candidate) => this.toCandidateScheduleView(candidate))]
+    const sourceSignals = await this.futureEventRepository.listFutureEventSignals({
+      take: month ? 1000 : parsedTake,
+    });
+    const candidateEvidenceRefs = new Set(
+      candidates.flatMap((candidate) => normalizeStringArray(candidate.evidenceRefs)),
+    );
+    const signalViews = sourceSignals
+      .filter((signal) => !candidateEvidenceRefs.has(signal.id))
+      .map((signal) => this.toSignalScheduleView(signal));
+
+    if (!month) {
+      return [...eventViews, ...candidates.map((candidate) => this.toCandidateScheduleView(candidate)), ...signalViews];
+    }
+
+    return [...eventViews, ...candidates.map((candidate) => this.toCandidateScheduleView(candidate)), ...signalViews]
       .filter((event) => isInMonth(event.factTime, month));
   }
 
@@ -281,6 +290,82 @@ export class FutureEventController {
       updatedAt: updatedAt.toISOString(),
     };
   }
+
+  private toSignalScheduleView(signal: FutureEventSignal) {
+    const metadata = isRecord(signal.metadata) ? signal.metadata : {};
+    const factTime = parseMaybeDate(metadata.scheduledAt) ?? parseMaybeDate(metadata.startAt);
+    const eventType = getString(metadata.eventType) ?? 'official_schedule';
+    const sourceType = getString(metadata.sourceType) ?? 'official_schedule';
+    const sourceUrl = getString(metadata.sourceUrl) ?? '';
+    const subject = getString(metadata.subject) ?? sourceType;
+    const confidence = toConfidence(getString(metadata.confidence));
+    const summary =
+      getString(signal.summary) ?? `${subject} 官方日程中的未来事件：${signal.title}`;
+    const candidateLike: FutureEventCandidate = {
+      id: signal.id,
+      title: signal.title,
+      eventType,
+      scheduledAt: factTime,
+      domains: [sourceType, 'official_schedule'],
+      summary,
+      whyItMatters: `${signal.title} 已进入官方未来事件来源，可用于运营排期观察。`,
+      suggestedKeywords: [signal.title],
+      suggestedAccounts: [],
+      suggestedPlatforms: [],
+      evidenceRefs: [signal.id],
+      confidence,
+      status: 'new',
+      missingData: [],
+      riskNotes: [],
+      createdAt: signal.createdAt,
+      updatedAt: signal.updatedAt,
+    };
+
+    return {
+      id: signal.id,
+      title: signal.title,
+      subject,
+      eventType,
+      factTime: factTime?.toISOString() ?? null,
+      timezone: getString(metadata.timezone) ?? 'UTC',
+      schedulePrecision: getString(metadata.schedulePrecision) ?? 'unknown',
+      confirmationLevel: getString(metadata.confirmationLevel) ?? 'confirmed',
+      expressionBoundary: getString(metadata.expressionBoundary) ?? 'factual',
+      evidence: [
+        {
+          id: signal.id,
+          url: sourceUrl,
+          sourceType: 'future_event_source_item',
+          verifiedAt: signal.observedAt.toISOString(),
+          claims: [summary],
+          originalId: getString(metadata.sourceItemId),
+        },
+      ],
+      windows: {
+        monitoring: null,
+        preheat: null,
+        live: null,
+        followUp: null,
+      },
+      actionScore: this.actionScoreService.scoreCandidate(candidateLike),
+      heat: {
+        query: signal.title,
+        queryVersion: 'not_started',
+        monitoringStartedAt: null,
+        buckets: [],
+        last6h: 0,
+        prev6h: 0,
+        growthPct: null,
+        intensityMultiple: null,
+        cumulative: 0,
+      },
+      relatedEventId: null,
+      entryMode: 'source_signal',
+      ruleVersion: 'future-event-source-signal@v1',
+      createdAt: signal.createdAt.toISOString(),
+      updatedAt: signal.updatedAt.toISOString(),
+    };
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -323,6 +408,17 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
     : [];
+}
+
+function parseMaybeDate(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function toConfidence(value: unknown): 'high' | 'medium' | 'low' {
+  if (value === 'high' || value === 'low') return value;
+  return 'medium';
 }
 
 function isInMonth(isoTime: string | null, month: string) {
