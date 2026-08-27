@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { JsonObject, JsonValue } from '../../common/types/json.type';
 import { PrismaService } from '../../database/prisma.service';
+import { ProjectConfigService } from '../../project-config/project-config.service';
 import { ToolRegistryService } from '../tool-registry/tool-registry.service';
 
 @Injectable()
@@ -8,9 +9,11 @@ export class CoreAgentToolsService implements OnModuleInit {
   constructor(
     private readonly toolRegistry: ToolRegistryService,
     private readonly prisma: PrismaService,
+    private readonly projectConfigService: ProjectConfigService,
   ) {}
 
   onModuleInit(): void {
+    this.registerProjectConfigTools();
     this.registerSignalTools();
     this.registerXTrendTools();
     this.registerEvidenceTools();
@@ -18,6 +21,30 @@ export class CoreAgentToolsService implements OnModuleInit {
     this.registerEventTools();
     this.registerTopicWatchTools();
     this.registerTaskTools();
+  }
+
+  private registerProjectConfigTools(): void {
+    this.toolRegistry.register({
+      name: 'projectConfig.getXTrendConfig',
+      description:
+        '读取当前 X/Twitter 热榜采集配置，包括采集地区、每个地区榜单条数和自动采集间隔。适合回答“当前 X 热榜采集地区有哪些”“热榜多久采集一次”“每个地区采集多少条”等配置问题。',
+      permission: 'read',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+      fieldSelection: this.fieldSelection([
+        'regions',
+        'limit',
+        'collectionIntervalMs',
+      ]),
+      execute: async () => {
+        const config =
+          await this.projectConfigService.getXTrendCollectionConfig();
+
+        return this.toJson(config);
+      },
+    });
   }
 
   private registerSignalTools(): void {

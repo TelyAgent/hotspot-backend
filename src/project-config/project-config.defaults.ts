@@ -3,7 +3,7 @@ import { XTrendCollectionConfig } from './project-config.types';
 export const DEFAULT_X_TREND_COLLECTION_CONFIG: XTrendCollectionConfig = {
   regions: ['global', 'United States', 'United Kingdom', 'Japan', 'Korea'],
   limit: 30,
-  collectionIntervalMs: 2 * 60 * 60 * 1000,
+  collectionIntervalMs: 3 * 60 * 60 * 1000,
 };
 
 export const PROJECT_CONFIG_DESCRIPTIONS: Record<string, string> = {

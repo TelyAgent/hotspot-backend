@@ -84,8 +84,7 @@ export class YoutubeService {
       take: 50,
     });
 
-    return {
-      videos: signals.map((signal) => {
+    const videos = signals.map((signal) => {
         const metadata = isRecord(signal.metadata) ? signal.metadata : {};
         const metrics = isRecord(signal.metrics) ? signal.metrics : {};
         const videoId = getString(metadata.videoId) ?? signal.id;
@@ -101,6 +100,7 @@ export class YoutubeService {
           thumbnailUrl: getNullableString(metadata.thumbnailUrl),
           channelTitle: getNullableString(metadata.channelTitle),
           publishedAt: getNullableString(metadata.publishedAt),
+          observedAt: signal.observedAt.toISOString(),
           consecutiveHotDays: 1,
           boardVisibleUntil: new Date(signal.observedAt.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           selectionSources: Array.isArray(metadata.selectionSources)
@@ -131,7 +131,11 @@ export class YoutubeService {
               }
             : null,
         };
-      }),
+      });
+
+    return {
+      stats: buildYoutubeBoardStats(videos),
+      videos,
     };
   }
 
@@ -162,4 +166,46 @@ function getNumber(value: unknown, fallback: number) {
 
 function getNullableNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+type YoutubeBoardVideoView = {
+  observedAt: string;
+  selectionSources: unknown[];
+  matchedKeywords: string[];
+  analysis: unknown | null;
+};
+
+export function buildYoutubeBoardStats(videos: YoutubeBoardVideoView[]) {
+  const todayStart = startOfToday();
+  const todayVideos = videos.filter((video) => {
+    const observedAt = new Date(video.observedAt).getTime();
+    return Number.isFinite(observedAt) && observedAt >= todayStart.getTime();
+  });
+
+  return {
+    todayNew: todayVideos.length,
+    officialVideos: todayVideos.filter((video) =>
+      video.selectionSources.some(isYoutubeOfficialSource),
+    ).length,
+    keywordVideos: todayVideos.filter((video) => video.matchedKeywords.length > 0)
+      .length,
+    analyzedVideos: videos.filter((video) => Boolean(video.analysis)).length,
+  };
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function isYoutubeOfficialSource(value: unknown) {
+  if (!isRecord(value)) return false;
+  const type = getString(value.type);
+  const label = getString(value.label);
+
+  return (
+    type === 'youtube_trending' ||
+    type === 'official_popular' ||
+    Boolean(label?.includes('官方热门'))
+  );
 }

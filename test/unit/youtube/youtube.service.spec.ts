@@ -4,7 +4,7 @@ import { YoutubeAnalysisService } from '../../../src/youtube/youtube-analysis.se
 import { YoutubeService } from '../../../src/youtube/youtube.service';
 
 describe('YoutubeService', () => {
-  it('analyzes all collected youtube videos after collection succeeds', async () => {
+  it('does not analyze videos automatically after collection succeeds', async () => {
     const collectionRunner = {
       run: jest.fn(() =>
         Promise.resolve({
@@ -42,7 +42,7 @@ describe('YoutubeService', () => {
 
     await service.run();
 
-    expect(analysis.analyzeMissing).toHaveBeenCalledWith({ limit: 50 });
+    expect(analysis.analyzeMissing).not.toHaveBeenCalled();
   });
 
   it('returns analysis status and result in the youtube board', async () => {

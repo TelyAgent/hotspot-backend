@@ -35,6 +35,43 @@ export class CopilotService {
       },
     });
 
+    const deterministicResponse =
+      await this.assistantService.tryAnswerDeterministic({
+        message: input.message,
+        context: {
+          page: getString(input.context.page) ?? input.client ?? 'unknown',
+          setting: getString(input.context.setting) ?? undefined,
+          region: getString(input.context.region) ?? undefined,
+          event: getString(input.context.event) ?? undefined,
+        },
+      });
+
+    if (deterministicResponse) {
+      const response: CopilotChatResponse = {
+        sessionId: session.id,
+        message: deterministicResponse.message,
+        proposedActions: [],
+        usedTools: ['projectConfig.getXTrendConfig'],
+        missingData: [],
+        suggestedNextSteps: [],
+      };
+
+      await this.prisma.copilotMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'assistant',
+          content: response.message,
+          metadata: toInputJson({
+            usedTools: response.usedTools,
+            missingData: response.missingData,
+            suggestedNextSteps: response.suggestedNextSteps,
+          }),
+        },
+      });
+
+      return response;
+    }
+
     const agentResult = await this.workflowEngine.run({
       agentType: 'assistant',
       goal: {
@@ -278,7 +315,9 @@ export class CopilotService {
     if (/(配置|哪些|查看|当前|列表)/.test(message)) {
       return {
         type: 'config_read',
-        guidance: '优先调用配置类工具回答。',
+        guidance:
+          '优先调用配置类工具回答。X/Twitter 热榜采集地区、条数、频率必须调用 projectConfig.getXTrendConfig。',
+        preferredTools: ['projectConfig.getXTrendConfig', 'topicWatch.list', 'topicWatch.get'],
       };
     }
     return {

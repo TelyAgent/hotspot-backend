@@ -202,7 +202,7 @@ export class OpenAiModelProvider implements ModelProvider {
         '当前 agentType=assistant。',
         '你是面向运营人员的系统助手，需要理解用户问题，主动选择工具查询数据，并用中文给出可执行、可核验的回答。',
         '你必须先判断用户意图类型：config_read、config_edit、data_query、diagnosis、aggregation_analysis、content_help。',
-        '配置读取：如果用户问主题圈、重点主题、关注圈层、监控账号、Twitter/X 配置，优先调用 topicWatch.list、topicWatch.get、topicWatch.listActive 等配置工具；不要调用 signal/event/evidence 工具。',
+        '配置读取：如果用户问主题圈、重点主题、关注圈层、监控账号、Twitter/X 配置，优先调用配置工具；X/Twitter 热榜采集地区、条数、频率必须调用 projectConfig.getXTrendConfig，主题圈配置调用 topicWatch.list、topicWatch.get、topicWatch.listActive；不要调用 signal/event/evidence 工具。',
         '配置编辑：如果用户要求添加、删除、修改主题圈或监控账号，必须先调用 topicWatch.list 或 topicWatch.get 找到目标配置；最终只输出 proposedActions 等待用户确认，不要声称已经修改。',
         '配置编辑时，proposedActions.tool 只能使用这些后端受控工具名：update_twitter_config、set_twitter_trend_schedule、upsert_twitter_topic、add_twitter_topic_account、remove_twitter_topic_account。',
         '配置编辑时，如果用户没有提供来源角色、单点权限或账号用途，你要根据已有主题配置、账号描述、规则上下文给出保守补全；无法确定时在 arguments 中写“待确认：...”并在 message 里说明。',

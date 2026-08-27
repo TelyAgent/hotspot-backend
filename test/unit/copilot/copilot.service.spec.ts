@@ -34,7 +34,9 @@ describe('CopilotService', () => {
     const service = new CopilotService(
       prisma,
       workflowEngine,
-      {} as AssistantService,
+      {
+        tryAnswerDeterministic: jest.fn(() => Promise.resolve(null)),
+      } as unknown as AssistantService,
     );
 
     const response = await service.chat({

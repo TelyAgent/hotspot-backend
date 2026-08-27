@@ -40,6 +40,11 @@ export class AssistantService {
       };
     }
 
+    const deterministicResponse = await this.tryAnswerDeterministic(input);
+    if (deterministicResponse) {
+      return deterministicResponse;
+    }
+
     const agentResponse = await this.runAssistantAgent(input, message);
     if (agentResponse) {
       return agentResponse;
@@ -54,6 +59,24 @@ export class AssistantService {
     return {
       message: this.defaultReply(input),
     };
+  }
+
+  async tryAnswerDeterministic(
+    input: AssistantChatInput,
+  ): Promise<AssistantChatResponse | null> {
+    const message = input.message.trim();
+
+    if (this.isXTrendConfigQuestion(message)) {
+      const config = await this.projectConfigService.getXTrendCollectionConfig();
+      return {
+        message: [
+          `当前 X 热榜采集地区共 ${config.regions.length} 个：${config.regions.join('、')}。`,
+          `每个地区采集 ${config.limit} 条，自动采集间隔为 ${formatDuration(config.collectionIntervalMs)}。`,
+        ].join('\n'),
+      };
+    }
+
+    return null;
   }
 
   async executeTool(
@@ -273,7 +296,7 @@ export class AssistantService {
         type: 'config_edit',
         guidance:
           '先读取相关配置，找到目标主题或配置项，再输出 proposedActions 等待用户确认；不要查询无关 Signal。',
-        preferredTools: ['topicWatch.list', 'topicWatch.get'],
+        preferredTools: ['projectConfig.getXTrendConfig', 'topicWatch.list', 'topicWatch.get'],
       };
     }
 
@@ -285,7 +308,12 @@ export class AssistantService {
       return {
         type: 'config_read',
         guidance: '优先调用配置类工具，不要把最近 Signal 当作配置答案。',
-        preferredTools: ['topicWatch.list', 'topicWatch.get', 'topicWatch.listActive'],
+        preferredTools: [
+          'projectConfig.getXTrendConfig',
+          'topicWatch.list',
+          'topicWatch.get',
+          'topicWatch.listActive',
+        ],
       };
     }
 
@@ -334,6 +362,19 @@ export class AssistantService {
       );
 
     return asksTopic && asksList;
+  }
+
+  private isXTrendConfigQuestion(message: string): boolean {
+    const asksXTrend = /(X|Twitter|推特|热榜|热搜|榜单)/i.test(message);
+    const asksConfig =
+      /(采集|抓取|同步|配置|设置|地区|区域|范围|条数|数量|频率|间隔)/.test(
+        message,
+      );
+    const asksRead = /(哪些|什么|多少|查看|当前|现在|已有|有哪些|几)/.test(
+      message,
+    );
+
+    return asksXTrend && asksConfig && asksRead;
   }
 
   private async describeTopicWatches(): Promise<string> {

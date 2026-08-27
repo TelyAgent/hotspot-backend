@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../database/prisma.module';
+import { ProjectConfigModule } from '../project-config/project-config.module';
 import { AgentController } from './agent.controller';
 import { AgentRunRepository } from './run-log/agent-run.repository';
 import { AgentRunLogService } from './run-log/agent-run-log.service';
@@ -13,7 +14,7 @@ import { UnconfiguredModelProvider } from './model-provider/unconfigured-model-p
 import { AGENT_WORKFLOW_ENGINE, MODEL_PROVIDER } from './agent.tokens';
 
 @Module({
-  imports: [ConfigModule, PrismaModule],
+  imports: [ConfigModule, PrismaModule, ProjectConfigModule],
   controllers: [AgentController],
   providers: [
     ToolRegistryService,
