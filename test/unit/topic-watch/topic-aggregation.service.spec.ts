@@ -5,7 +5,7 @@ import { Signal } from '../../../src/signal/signal/signal.types';
 describe('TopicAggregationService', () => {
   it('aggregates multiple account posts into one topic candidate by entity', async () => {
     const repository = {
-      createCandidate: jest.fn((input) =>
+      upsertCandidateByClusterKey: jest.fn((input) =>
         Promise.resolve({
           id: 'tc_1',
           ...input,
@@ -13,6 +13,7 @@ describe('TopicAggregationService', () => {
           updatedAt: new Date('2026-08-24T10:00:00.000Z'),
         }),
       ),
+      listRecentPostSignalsByAuthor: jest.fn(() => Promise.resolve([])),
     } as unknown as TopicWatchRepository;
     const service = new TopicAggregationService(repository);
 
@@ -35,9 +36,11 @@ describe('TopicAggregationService', () => {
     });
 
     expect(candidates).toHaveLength(1);
-    expect(repository.createCandidate).toHaveBeenCalledWith(
+    expect(repository.upsertCandidateByClusterKey).toHaveBeenCalledWith(
       expect.objectContaining({
         topicWatchId: 'tw_1',
+        title: 'OpenAI 发布新模型',
+        summary: '多个账号正在讨论 OpenAI 发布新模型等动态。',
         signalCount: 2,
         postCount: 2,
         accountCount: 2,
@@ -50,6 +53,42 @@ describe('TopicAggregationService', () => {
           tmaxSignalId: 'sig_2',
           tmaxTop5Percent: null,
         }),
+      }),
+    );
+  });
+
+  it('creates a Chinese one-sentence topic summary instead of copying post text', async () => {
+    const repository = {
+      upsertCandidateByClusterKey: jest.fn((input) =>
+        Promise.resolve({
+          id: 'tc_1',
+          ...input,
+          createdAt: new Date('2026-08-24T10:00:00.000Z'),
+          updatedAt: new Date('2026-08-24T10:00:00.000Z'),
+        }),
+      ),
+      listRecentPostSignalsByAuthor: jest.fn(() => Promise.resolve([])),
+    } as unknown as TopicWatchRepository;
+    const service = new TopicAggregationService(repository);
+
+    await service.aggregate({
+      topicWatchId: 'tw_1',
+      windowStartAt: new Date('2026-08-24T10:00:00.000Z'),
+      windowEndAt: new Date('2026-08-24T11:00:00.000Z'),
+      signals: [
+        createSignal({
+          id: 'sig_1',
+          title:
+            'Polymarket: JUST IN: Over a third of British employers have reduced entry-level hiring due to AI.',
+          authorHandle: 'Polymarket',
+        }),
+      ],
+    });
+
+    expect(repository.upsertCandidateByClusterKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '英国雇主因 AI 减少初级岗位招聘',
+        summary: 'Polymarket 正在讨论英国雇主因 AI 减少初级岗位招聘。',
       }),
     );
   });

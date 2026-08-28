@@ -270,7 +270,7 @@ export class XTrendsPlugin implements DataSourcePlugin {
     return (body.trends ?? []).slice(0, input.outputLimit).map((item, index) => {
       const trend = item.trend ?? item;
       const name = trend.name ?? trend.target?.query ?? `trend-${index + 1}`;
-      const query = trend.target?.query ?? name;
+      const query = normalizeTrendQuery(trend.target?.query ?? name);
       const rank = trend.rank ?? index + 1;
 
       return {
@@ -316,6 +316,10 @@ function resolveRegionWoeids(value: JsonValue | undefined): Record<string, numbe
 
 function getString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function normalizeTrendQuery(value: string) {
+  return value.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '');
 }
 
 function getNumber(value: unknown, fallback = 0): number {

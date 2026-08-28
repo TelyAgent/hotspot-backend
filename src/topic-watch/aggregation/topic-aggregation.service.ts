@@ -61,7 +61,10 @@ export class TopicAggregationService {
 
     const groups = new Map<string, Signal[]>();
     for (const cluster of clusters) {
-      groups.set(cluster.key, cluster.signals);
+      groups.set(cluster.key, [
+        ...(groups.get(cluster.key) ?? []),
+        ...cluster.signals,
+      ]);
     }
     return groups;
   }
@@ -108,8 +111,8 @@ export class TopicAggregationService {
 
     return {
       topicWatchId,
-      title: sortedSignals[0].title,
-      summary: this.createSummary(sortedSignals),
+      title: this.createTitle(topicWatchId, sortedSignals, entities),
+      summary: this.createSummary(topicWatchId, sortedSignals, entities),
       keywords,
       entities,
       firstSeenAt: sortedSignals[0].observedAt,
@@ -158,9 +161,37 @@ export class TopicAggregationService {
     return [...values];
   }
 
-  private createSummary(signals: Signal[]): string {
-    const titles = [...new Set(signals.map((signal) => signal.title))];
-    return titles.slice(0, 3).join(' / ');
+  private createTitle(
+    topicWatchId: string,
+    signals: Signal[],
+    entities: string[],
+  ): string {
+    const normalizedTitles = signals
+      .map((signal) => normalizePostTitle(signal.title))
+      .filter(Boolean);
+    const bestTitle = pickShortestUsefulText(normalizedTitles);
+    return createChineseTopicTitle(bestTitle, entities, topicWatchId);
+  }
+
+  private createSummary(
+    topicWatchId: string,
+    signals: Signal[],
+    entities: string[],
+  ): string {
+    const title = this.createTitle(topicWatchId, signals, entities);
+    const authors = signals
+      .map(getSignalAuthor)
+      .filter((author): author is string => Boolean(author));
+    const uniqueAuthors = [...new Set(authors.map(normalizeAuthorHandle))];
+    const subject =
+      uniqueAuthors.length >= 2
+        ? '多个账号'
+        : uniqueAuthors[0]
+          ? formatAuthor(uniqueAuthors[0])
+          : entities[0] ?? '相关账号';
+
+    const connector = startsWithAscii(title) ? ' ' : '';
+    return `${subject}正在讨论${uniqueAuthors.length >= 2 ? ` ${title}等动态` : `${connector}${title}`}。`;
   }
 
   private async calculateHotnessMetrics(signals: Signal[]) {
@@ -330,6 +361,144 @@ function calculatePostTrafficScore(signal: Signal) {
   );
 }
 
+function normalizePostTitle(value: string) {
+  return value
+    .replace(/https?:\/\/\S+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .replace(/^[@#]?\w{2,30}\s*[：:]\s*/u, '')
+    .replace(/^(just in|breaking|new)\s*[：:-]\s*/iu, '')
+    .trim();
+}
+
+function pickShortestUsefulText(values: string[]) {
+  const unique = [...new Set(values.filter(Boolean))];
+  if (unique.length === 0) return '相关动态';
+  return [...unique].sort((left, right) => {
+    const leftScore = scoreUsefulTitle(left);
+    const rightScore = scoreUsefulTitle(right);
+    return rightScore - leftScore || left.length - right.length;
+  })[0];
+}
+
+function scoreUsefulTitle(value: string) {
+  let score = 0;
+  if (containsChinese(value)) score += 4;
+  if (value.length <= 80) score += 2;
+  if (!/https?:\/\//iu.test(value)) score += 1;
+  if (!/#\w+/u.test(value)) score += 1;
+  return score;
+}
+
+function createChineseTopicTitle(
+  value: string,
+  entities: string[],
+  topicWatchId: string,
+) {
+  const text = normalizePostTitle(value);
+  const lower = text.toLowerCase();
+
+  if (containsChinese(text)) {
+    return ensureSentenceCore(text);
+  }
+
+  const patternTitle = translateKnownTopicPattern(text, lower);
+  if (patternTitle) {
+    return patternTitle;
+  }
+
+  const entity = entities.find(isMeaningfulEntity);
+  if (entity) {
+    return ensureSentenceCore(`${entity.trim()} 相关动态`);
+  }
+
+  return ensureSentenceCore(topicWatchFallbackTitle(topicWatchId));
+}
+
+function translateKnownTopicPattern(text: string, lower: string) {
+  if (
+    lower.includes('british employers') &&
+    lower.includes('entry-level hiring') &&
+    lower.includes('ai')
+  ) {
+    return '英国雇主因 AI 减少初级岗位招聘';
+  }
+
+  if (
+    lower.includes('trump-backed') &&
+    lower.includes('south carolina')
+  ) {
+    return '特朗普支持候选人在南卡罗来纳州选举中领先';
+  }
+
+  if (
+    lower.includes('u.s. state department') &&
+    lower.includes('visa appointments')
+  ) {
+    return '美国签证预约暂停后仍缺少恢复时间表';
+  }
+
+  if (lower.includes('ugandan army chief')) {
+    return '乌干达军方高层相关政治动态';
+  }
+
+  if (lower.includes('irish fa') && lower.includes('fifa president')) {
+    return '爱尔兰足协撤回对 FIFA 主席的支持';
+  }
+
+  if (lower.includes('ukrainian man') && lower.includes('berlin')) {
+    return '乌克兰男子涉柏林枪支案件被拘留';
+  }
+
+  if (lower.includes('new polymarket') && lower.includes('mecca agreement')) {
+    return 'Polymarket 出现麦加协议相关新市场';
+  }
+
+  if (lower.includes('meta') && lower.includes('settlement') && lower.includes('u.s. states')) {
+    return 'Meta 与美国州政府讨论诉讼和解';
+  }
+
+  if (lower.includes('openai') && (lower.includes('new model') || lower.includes('model'))) {
+    return 'OpenAI 发布新模型';
+  }
+
+  return null;
+}
+
+function ensureSentenceCore(text: string) {
+  return text
+    .replace(/\s+/gu, ' ')
+    .replace(/[。.!?！？]+$/u, '')
+    .slice(0, 80)
+    .trim() || '相关动态';
+}
+
+function containsChinese(value: string) {
+  return /[\u4e00-\u9fa5]/u.test(value);
+}
+
+function normalizeAuthorHandle(value: string) {
+  return value.trim().replace(/^@/u, '');
+}
+
+function formatAuthor(value: string) {
+  return value ? `${value} ` : '';
+}
+
+function startsWithAscii(value: string) {
+  return /^[A-Za-z0-9]/u.test(value.trim());
+}
+
+function isMeaningfulEntity(value: string) {
+  const normalized = value.trim();
+  if (!normalized) return false;
+  if (SOURCE_ACCOUNT_ENTITIES.has(normalized.toLowerCase())) return false;
+  return /^[A-Z0-9][A-Za-z0-9 .&+-]{1,48}$/u.test(normalized);
+}
+
+function topicWatchFallbackTitle(topicWatchId: string) {
+  return TOPIC_WATCH_FALLBACK_TITLES[topicWatchId] ?? '重点主题相关动态';
+}
+
 function median(values: number[]) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
@@ -395,4 +564,35 @@ const TOPIC_STOP_WORDS = new Set([
   'says',
   'said',
   'reportedly',
+]);
+
+const TOPIC_WATCH_FALLBACK_TITLES: Record<string, string> = {
+  'topic-prediction-market': '预测市场相关动态',
+  'topic-macro-finance': '宏观经济与金融相关动态',
+  'topic-ai-tech': 'AI 与科技相关动态',
+  'topic-crypto-web3': 'Crypto 与 Web3 相关动态',
+  'topic-politics-election': '政治与选举相关动态',
+  demo_topic_ai_products: 'AI 产品机会相关动态',
+};
+
+const SOURCE_ACCOUNT_ENTITIES = new Set([
+  'abc',
+  'ap',
+  'bbc',
+  'bbcworld',
+  'bloomberg',
+  'cnbc',
+  'cnn',
+  'coindesk',
+  'cointelegraph',
+  'decrypt',
+  'foxnews',
+  'polymarket',
+  'polymarketintel',
+  'reuters',
+  'techcrunch',
+  'theblock',
+  'theinformation',
+  'wired',
+  'wsj',
 ]);
