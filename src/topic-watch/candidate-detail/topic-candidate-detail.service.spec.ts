@@ -67,6 +67,57 @@ describe('TopicCandidateDetailService', () => {
       },
     ]);
   });
+
+  it('deduplicates repeated snapshots of the same post and keeps the latest metrics', async () => {
+    const repository = {
+      findCandidateById: jest.fn().mockResolvedValue({
+        ...createCandidate(),
+        representativeSignalIds: ['sig_1', 'sig_2'],
+      }),
+      listSignalsByIds: jest.fn().mockResolvedValue([
+        createSignal({
+          id: 'sig_1',
+          authorHandle: 'Polymarket',
+          authorName: 'Polymarket',
+          postId: '2092502805294584138',
+          text: 'JUST IN: Ugandan army chief Muhoozi Kainerugaba declares he will run for president in 2031.',
+          url: 'https://x.com/Polymarket/status/2092502805294584138',
+          observedAt: new Date('2026-08-26T06:42:17.571Z'),
+          metrics: { views: 6300, likes: 3, replies: 1, reposts: 1 },
+        }),
+        createSignal({
+          id: 'sig_2',
+          authorHandle: 'Polymarket',
+          authorName: 'Polymarket',
+          postId: '2092502805294584138',
+          text: 'JUST IN: Ugandan army chief Muhoozi Kainerugaba declares he will run for president in 2031.',
+          url: 'https://x.com/Polymarket/status/2092502805294584138',
+          observedAt: new Date('2026-08-26T08:28:15.846Z'),
+          metrics: { views: 27495, likes: 93, replies: 30, reposts: 14 },
+        }),
+      ]),
+      listEvidenceBySignalIds: jest.fn().mockResolvedValue([]),
+    };
+    const service = new TopicCandidateDetailService(repository as never);
+
+    const posts = await service.listCandidatePosts({
+      topicWatchId: 'topic-prediction-market',
+      candidateId: 'candidate_1',
+    });
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toEqual(
+      expect.objectContaining({
+        postId: '2092502805294584138',
+        metrics: expect.objectContaining({
+          views: 27495,
+          likes: 93,
+          replies: 30,
+          reposts: 14,
+        }),
+      }),
+    );
+  });
 });
 
 function createCandidate(): TopicCandidate {
@@ -100,7 +151,11 @@ function createSignal(input: {
   postId: string;
   text: string;
   url: string;
+  observedAt?: Date;
+  metrics?: Signal['metrics'];
 }): Signal {
+  const observedAt = input.observedAt ?? new Date('2026-08-25T02:00:00.000Z');
+
   return {
     id: input.id,
     rawItemId: `raw_${input.id}`,
@@ -109,9 +164,9 @@ function createSignal(input: {
     signalType: 'x_post',
     title: `${input.authorHandle}：${input.text}`,
     summary: input.text,
-    observedAt: new Date('2026-08-25T02:00:00.000Z'),
+    observedAt,
     rawRefs: [`raw_${input.id}`],
-    metrics: {},
+    metrics: input.metrics ?? {},
     metadata: {
       authorHandle: input.authorHandle,
       authorName: input.authorName,
@@ -120,7 +175,7 @@ function createSignal(input: {
       publishedAt: '2026-08-25T02:00:00.000Z',
       url: input.url,
     },
-    createdAt: new Date('2026-08-25T02:00:00.000Z'),
-    updatedAt: new Date('2026-08-25T02:00:00.000Z'),
+    createdAt: observedAt,
+    updatedAt: observedAt,
   };
 }

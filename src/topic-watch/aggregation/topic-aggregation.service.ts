@@ -108,6 +108,7 @@ export class TopicAggregationService {
     const sourceTypes = [...new Set(signals.map((signal) => signal.signalType))];
     const authors = this.collectMetadataStrings(signals, 'authorHandles');
     const hotnessMetrics = await this.calculateHotnessMetrics(sortedSignals);
+    const uniquePostSignals = uniqueLatestPostSignals(sortedSignals);
 
     return {
       topicWatchId,
@@ -118,10 +119,10 @@ export class TopicAggregationService {
       firstSeenAt: sortedSignals[0].observedAt,
       lastSeenAt: sortedSignals[sortedSignals.length - 1].observedAt,
       signalCount: signals.length,
-      postCount: signals.filter((signal) => isPostSignal(signal.signalType)).length,
+      postCount: uniquePostSignals.filter((signal) => isPostSignal(signal.signalType)).length,
       accountCount: authors.length || null,
       sourceTypes,
-      representativeSignalIds: sortedSignals.slice(0, 5).map((signal) => signal.id),
+      representativeSignalIds: uniquePostSignals.slice(0, 5).map((signal) => signal.id),
       evidenceRefs: [],
       metrics: {
         uniqueAuthors: authors.length,
@@ -167,7 +168,7 @@ export class TopicAggregationService {
     entities: string[],
   ): string {
     const normalizedTitles = signals
-      .map((signal) => normalizePostTitle(signal.title))
+      .map((signal) => normalizePostTitle(signal.summary ?? signal.title))
       .filter(Boolean);
     const bestTitle = pickShortestUsefulText(normalizedTitles);
     return createChineseTopicTitle(bestTitle, entities, topicWatchId);
@@ -328,6 +329,44 @@ function countUniqueAuthorsInWindow(signals: Signal[], windowStartAt: number) {
   return authors.size;
 }
 
+function uniqueLatestPostSignals(signals: Signal[]) {
+  const latestByPostKey = new Map<string, Signal>();
+
+  for (const signal of signals) {
+    const key = getSignalPostKey(signal);
+    const current = latestByPostKey.get(key);
+    if (!current || signal.observedAt.getTime() >= current.observedAt.getTime()) {
+      latestByPostKey.set(key, signal);
+    }
+  }
+
+  return [...latestByPostKey.values()].sort(
+    (left, right) => left.observedAt.getTime() - right.observedAt.getTime(),
+  );
+}
+
+function getSignalPostKey(signal: Signal) {
+  const metadata = signal.metadata;
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const postId = metadata.postId;
+    if (typeof postId === 'string' && postId.trim()) {
+      return `post:${postId.trim()}`;
+    }
+
+    const sourceItemId = metadata.sourceItemId;
+    if (typeof sourceItemId === 'string' && sourceItemId.trim()) {
+      return `source-item:${sourceItemId.trim()}`;
+    }
+
+    const url = metadata.url;
+    if (typeof url === 'string' && url.trim()) {
+      return `url:${url.trim()}`;
+    }
+  }
+
+  return `signal:${signal.id}`;
+}
+
 function getSignalAuthor(signal: Signal) {
   const metadata = signal.metadata;
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
@@ -418,16 +457,74 @@ function translateKnownTopicPattern(text: string, lower: string) {
   if (
     lower.includes('british employers') &&
     lower.includes('entry-level hiring') &&
-    lower.includes('ai')
+    (lower.includes('ai') || lower.includes('automation'))
   ) {
-    return '英国雇主因 AI 减少初级岗位招聘';
+    return '英国雇主因 AI 和自动化减少初级岗位招聘';
   }
 
   if (
-    lower.includes('trump-backed') &&
+    lower.includes('darline graham') &&
     lower.includes('south carolina')
   ) {
-    return '特朗普支持候选人在南卡罗来纳州选举中领先';
+    return 'Darline Graham 赢得南卡罗来纳州共和党初选';
+  }
+
+  if (
+    lower.includes('truckload') &&
+    lower.includes('cheese balls') &&
+    lower.includes('los angeles freeway')
+  ) {
+    return '洛杉矶高速公路发生奶酪球货车洒落事件';
+  }
+
+  if (
+    lower.includes('jim cramer') &&
+    lower.includes('nvidia') &&
+    lower.includes('competitors')
+  ) {
+    return 'Jim Cramer 认为 NVIDIA 缺少真正竞争对手';
+  }
+
+  if (
+    lower.includes('empire state building') &&
+    lower.includes('dolly parton')
+  ) {
+    return '帝国大厦为 Dolly Parton 亮起粉色灯光';
+  }
+
+  if (
+    lower.includes('capitol') &&
+    lower.includes('guillotine') &&
+    lower.includes('truck')
+  ) {
+    return '美国国会附近发现载有危险物品的车辆';
+  }
+
+  if (
+    lower.includes('oklahoma') &&
+    lower.includes('governor') &&
+    lower.includes('primary')
+  ) {
+    return '俄克拉荷马州州长初选出现新的预测动态';
+  }
+
+  if (lower.includes('nvidia') && lower.includes('earnings')) {
+    return 'NVIDIA 财报表现成为预测市场关注点';
+  }
+
+  if (
+    lower.includes('australia') &&
+    lower.includes('sovereign wealth fund')
+  ) {
+    return '澳大利亚主权财富基金管理层变动受关注';
+  }
+
+  if (
+    lower.includes('jasmine') &&
+    lower.includes('senate') &&
+    lower.includes('primary')
+  ) {
+    return '美国参议院初选相关预测市场动态';
   }
 
   if (

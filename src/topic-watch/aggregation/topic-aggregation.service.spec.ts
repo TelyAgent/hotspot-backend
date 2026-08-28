@@ -71,6 +71,40 @@ describe('TopicAggregationService', () => {
     expect(candidate.metrics.b24h).toBe(1);
   });
 
+  it('uses one representative signal for repeated snapshots of the same post', async () => {
+    const repository = new InMemoryTopicCandidateRepository();
+    const service = new TopicAggregationService(repository as never);
+
+    const [candidate] = await service.aggregate({
+      topicWatchId: 'topic-prediction-market',
+      windowStartAt: new Date('2026-08-25T00:00:00.000Z'),
+      windowEndAt: new Date('2026-08-25T03:00:00.000Z'),
+      signals: [
+        createSignal({
+          id: 'sig_1',
+          title:
+            'Polymarket：JUST IN: Ugandan army chief Muhoozi Kainerugaba declares he will run for president in 2031.',
+          authorHandle: 'Polymarket',
+          postId: '2092502805294584138',
+          observedAt: new Date('2026-08-25T01:00:00.000Z'),
+          metrics: { likes: 3, reposts: 1, replies: 1, quotes: 0 },
+        }),
+        createSignal({
+          id: 'sig_2',
+          title:
+            'Polymarket：JUST IN: Ugandan army chief Muhoozi Kainerugaba declares he will run for president in 2031.',
+          authorHandle: 'Polymarket',
+          postId: '2092502805294584138',
+          observedAt: new Date('2026-08-25T02:00:00.000Z'),
+          metrics: { likes: 31, reposts: 7, replies: 21, quotes: 2 },
+        }),
+      ],
+    });
+
+    expect(candidate.postCount).toBe(1);
+    expect(candidate.representativeSignalIds).toEqual(['sig_2']);
+  });
+
   it('groups posts with similar content from different accounts into one topic', async () => {
     const repository = new InMemoryTopicCandidateRepository();
     const service = new TopicAggregationService(repository as never);
@@ -210,8 +244,11 @@ function createSignal(input: {
   summary?: string;
   authorHandle: string;
   postId: string;
+  observedAt?: Date;
   metrics?: Signal['metrics'];
 }): Signal {
+  const observedAt = input.observedAt ?? new Date('2026-08-25T02:00:00.000Z');
+
   return {
     id: input.id,
     rawItemId: `raw_${input.id}`,
@@ -220,7 +257,7 @@ function createSignal(input: {
     signalType: 'x_post',
     title: input.title,
     summary: input.summary ?? input.title,
-    observedAt: new Date('2026-08-25T02:00:00.000Z'),
+    observedAt,
     rawRefs: [`raw_${input.id}`],
     metrics: input.metrics ?? {
       likes: 10,
@@ -236,7 +273,7 @@ function createSignal(input: {
       url: `https://x.com/${input.authorHandle}/status/${input.postId}`,
       publishedAt: '2026-08-25T02:00:00.000Z',
     },
-    createdAt: new Date('2026-08-25T02:00:00.000Z'),
-    updatedAt: new Date('2026-08-25T02:00:00.000Z'),
+    createdAt: observedAt,
+    updatedAt: observedAt,
   };
 }

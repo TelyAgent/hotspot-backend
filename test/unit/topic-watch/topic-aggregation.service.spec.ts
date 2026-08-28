@@ -87,8 +87,8 @@ describe('TopicAggregationService', () => {
 
     expect(repository.upsertCandidateByClusterKey).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: '英国雇主因 AI 减少初级岗位招聘',
-        summary: 'Polymarket 正在讨论英国雇主因 AI 减少初级岗位招聘。',
+        title: '英国雇主因 AI 和自动化减少初级岗位招聘',
+        summary: 'Polymarket 正在讨论英国雇主因 AI 和自动化减少初级岗位招聘。',
       }),
     );
   });

@@ -478,17 +478,7 @@ export class TopicWatchRepository {
           },
         })
       : null;
-    const existing =
-      existingByClusterKey ??
-      (await this.prisma.topicCandidate.findFirst({
-        where: {
-          topicWatchId: input.topicWatchId,
-          title: input.title,
-        },
-        orderBy: {
-          lastSeenAt: 'desc',
-        },
-      }));
+    const existing = existingByClusterKey;
 
     if (!existing) {
       return this.createCandidate(input);
@@ -628,8 +618,9 @@ function dedupeCandidates(candidates: TopicCandidate[]) {
 
   for (const candidate of candidates) {
     const key =
-      getJsonString(candidate.clustering, 'clusterKey') ??
-      normalizeCandidateTitle(candidate.title);
+      normalizeCandidateTitle(candidate.title) ||
+      getJsonString(candidate.clustering, 'clusterKey') ||
+      candidate.id;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(candidate);
