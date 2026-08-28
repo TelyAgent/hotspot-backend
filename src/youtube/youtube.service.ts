@@ -83,12 +83,21 @@ export class YoutubeService {
       },
       take: 50,
     });
+    const latestSuccessfulAnalysisByVideoId = await this.findLatestSuccessfulAnalysisByVideoId(
+      signals.map((signal) => {
+        const metadata = isRecord(signal.metadata) ? signal.metadata : {};
+        return getString(metadata.videoId) ?? signal.id;
+      }),
+    );
 
     const videos = signals.map((signal) => {
         const metadata = isRecord(signal.metadata) ? signal.metadata : {};
         const metrics = isRecord(signal.metrics) ? signal.metrics : {};
         const videoId = getString(metadata.videoId) ?? signal.id;
-        const latestAnalysis = signal.youtubeVideoAnalyses[0] ?? null;
+        const latestAnalysis =
+          signal.youtubeVideoAnalyses[0] ??
+          latestSuccessfulAnalysisByVideoId.get(videoId) ??
+          null;
         const analysisResult = isRecord(latestAnalysis?.result)
           ? latestAnalysis.result
           : null;
@@ -137,6 +146,42 @@ export class YoutubeService {
       stats: buildYoutubeBoardStats(videos),
       videos,
     };
+  }
+
+  private async findLatestSuccessfulAnalysisByVideoId(videoIds: string[]) {
+    const ids = Array.from(new Set(videoIds.filter(Boolean)));
+    if (ids.length === 0) return new Map<string, {
+      videoId: string;
+      status: string;
+      transcriptStatus: string | null;
+      result: unknown;
+      errorMessage: string | null;
+    }>();
+
+    const analyses = await this.prisma.youtubeVideoAnalysis.findMany({
+      where: {
+        videoId: {
+          in: ids,
+        },
+        status: 'success',
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+    const byVideoId = new Map<string, {
+      videoId: string;
+      status: string;
+      transcriptStatus: string | null;
+      result: unknown;
+      errorMessage: string | null;
+    }>();
+    analyses.forEach((analysis) => {
+      if (!byVideoId.has(analysis.videoId) && isRecord(analysis.result)) {
+        byVideoId.set(analysis.videoId, analysis);
+      }
+    });
+    return byVideoId;
   }
 
   analyzeVideo(videoId: string) {

@@ -34,6 +34,9 @@ describe('YoutubeService', () => {
           ]),
         ),
       },
+      youtubeVideoAnalysis: {
+        findMany: jest.fn(() => Promise.resolve([])),
+      },
     } as unknown as PrismaService;
     const analysis = {
       analyzeMissing: jest.fn(() => Promise.resolve({ analyzed: 2, skipped: 0, failed: 0 })),
@@ -81,6 +84,9 @@ describe('YoutubeService', () => {
           ]),
         ),
       },
+      youtubeVideoAnalysis: {
+        findMany: jest.fn(() => Promise.resolve([])),
+      },
     } as unknown as PrismaService;
     const service = new YoutubeService(
       collectionRunner,
@@ -98,6 +104,72 @@ describe('YoutubeService', () => {
         analysis: expect.objectContaining({
           mainReason: expect.objectContaining({
             topic: '这个视频讲了一个具体热点。',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('reuses the latest successful analysis by video id when the newest signal has no analysis', async () => {
+    const collectionRunner = {} as unknown as CollectionRunnerService;
+    const prisma = {
+      signal: {
+        findMany: jest.fn(() =>
+          Promise.resolve([
+            {
+              ...createYoutubeSignal('signal_latest', 'video_1'),
+              observedAt: new Date('2026-08-26T00:00:00.000Z'),
+              youtubeVideoAnalyses: [],
+            },
+          ]),
+        ),
+      },
+      youtubeVideoAnalysis: {
+        findMany: jest.fn(() =>
+          Promise.resolve([
+            {
+              videoId: 'video_1',
+              status: 'success',
+              transcriptStatus: 'available',
+              result: {
+                main_reason: {
+                  topic: '旧 Signal 已经完成过这个视频的拆解。',
+                  why_attractive: '同一 video_id 的拆解应该复用。',
+                  traffic_judgment: '公开指标来自最新 Signal，拆解来自历史成功记录。',
+                },
+                execution: {
+                  key_technique: '复用视频级拆解。',
+                  effect: '刷新页面后仍能展示内容。',
+                },
+                replication: {
+                  reusable_mechanism: '按 video_id 聚合。',
+                  product_remix_topic: '避免重复拆解。',
+                  product_entry: '保持看板稳定。',
+                },
+                limitations: [],
+              },
+              errorMessage: null,
+            },
+          ]),
+        ),
+      },
+    } as unknown as PrismaService;
+    const service = new YoutubeService(
+      collectionRunner,
+      prisma,
+      {} as unknown as YoutubeAnalysisService,
+    );
+
+    const board = await service.board();
+
+    expect(board.videos[0]).toEqual(
+      expect.objectContaining({
+        videoId: 'video_1',
+        analysisStatus: 'success',
+        transcriptStatus: 'available',
+        analysis: expect.objectContaining({
+          mainReason: expect.objectContaining({
+            topic: '旧 Signal 已经完成过这个视频的拆解。',
           }),
         }),
       }),
