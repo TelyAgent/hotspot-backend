@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ${BACKEND_IMAGE:-10.168.0.2:5000/hotspot-v2-backend:latest}
+    image: ${DOCKER_REGISTRY:-10.168.0.2:5000}/hotspot-v2-backend:${IMAGE_TAG:-latest}
     ports:
       - "${HOST_PORT:-3002}:3001"
     env_file:

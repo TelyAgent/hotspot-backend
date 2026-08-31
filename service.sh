@@ -30,34 +30,27 @@ check_basic() {
 pull() {
   local image_tag=${1:-$DEFAULT_IMAGE_TAG}
   local registry=${DOCKER_REGISTRY:-$DEFAULT_REGISTRY}
-  local backend_image=${BACKEND_IMAGE:-"$registry/$PROJECT_NAME:$image_tag"}
-  log "拉取镜像: $backend_image"
-  BACKEND_IMAGE="$backend_image" docker-compose pull backend
+  log "拉取镜像: $registry/$PROJECT_NAME:$image_tag"
+  IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose pull backend
 }
 
 migrate() {
   local image_tag=${1:-$DEFAULT_IMAGE_TAG}
   local registry=${DOCKER_REGISTRY:-$DEFAULT_REGISTRY}
-  local backend_image=${BACKEND_IMAGE:-"$registry/$PROJECT_NAME:$image_tag"}
   log "执行数据库迁移，镜像标签: $image_tag"
-  BACKEND_IMAGE="$backend_image" docker-compose run --rm backend npm run prisma:migrate:deploy
+  IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose run --rm backend npm run prisma:migrate:deploy
 }
 
 start() {
   local image_tag=${1:-$DEFAULT_IMAGE_TAG}
   local registry=${DOCKER_REGISTRY:-$DEFAULT_REGISTRY}
-  local backend_image=${BACKEND_IMAGE:-"$registry/$PROJECT_NAME:$image_tag"}
   log "启动 $PROJECT_NAME 服务，使用镜像标签: $image_tag"
   check_basic
-  if [[ "${SKIP_PULL:-false}" == "true" ]]; then
-    log "跳过镜像拉取，使用本机镜像: $backend_image"
-  else
-    BACKEND_IMAGE="$backend_image" pull "$image_tag"
-  fi
+  pull "$image_tag"
   migrate "$image_tag"
-  BACKEND_IMAGE="$backend_image" docker-compose up -d
+  IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose up -d
   log "服务启动完成，访问地址: http://localhost:${HOST_PORT:-3002}"
-  log "使用的镜像: $backend_image"
+  log "使用的镜像: $registry/$PROJECT_NAME:$image_tag"
 }
 
 stop() {
