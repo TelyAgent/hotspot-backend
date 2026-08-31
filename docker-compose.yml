@@ -20,7 +20,7 @@ services:
       - hotspot-agent-backend-network
 
   backend:
-    image: ${DOCKER_REGISTRY:-10.168.0.2:5000}/hotspot-agent-backend:${IMAGE_TAG:-latest}
+    image: ${DOCKER_REGISTRY:-10.168.0.2:5001}/hotspot-agent-backend:${IMAGE_TAG:-latest}
     depends_on:
       postgres:
         condition: service_healthy

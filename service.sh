@@ -10,7 +10,7 @@ cd "$SCRIPT_DIR"
 
 PROJECT_NAME="hotspot-agent-backend"
 DEFAULT_IMAGE_TAG="latest"
-DEFAULT_REGISTRY="10.168.0.2:5000"
+DEFAULT_REGISTRY="10.168.0.2:5001"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
