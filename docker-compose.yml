@@ -1,6 +1,29 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hotspot_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5435}:5432"
+    volumes:
+      - hotspot_v2_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-hotspot_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - hotspot-v2-backend-network
+
   backend:
     image: ${DOCKER_REGISTRY:-10.168.0.2:5000}/hotspot-v2-backend:${IMAGE_TAG:-latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "${HOST_PORT:-3002}:3001"
     env_file:
@@ -26,6 +49,7 @@ services:
 
 volumes:
   hotspot_v2_backend_logs:
+  hotspot_v2_postgres_data:
 
 networks:
   hotspot-v2-backend-network:

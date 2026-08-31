@@ -34,6 +34,23 @@ pull() {
   IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose pull backend
 }
 
+wait_for_postgres() {
+  local image_tag=${1:-$DEFAULT_IMAGE_TAG}
+  local registry=${DOCKER_REGISTRY:-$DEFAULT_REGISTRY}
+  log "启动并等待 Postgres 就绪..."
+  IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose up -d postgres
+  for i in {1..30}; do
+    if IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose exec -T postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-hotspot_agent}" >/dev/null 2>&1; then
+      log "Postgres 已就绪"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "错误: Postgres 在等待超时后仍未就绪"
+  docker-compose logs postgres
+  exit 1
+}
+
 migrate() {
   local image_tag=${1:-$DEFAULT_IMAGE_TAG}
   local registry=${DOCKER_REGISTRY:-$DEFAULT_REGISTRY}
@@ -47,6 +64,7 @@ start() {
   log "启动 $PROJECT_NAME 服务，使用镜像标签: $image_tag"
   check_basic
   pull "$image_tag"
+  wait_for_postgres "$image_tag"
   migrate "$image_tag"
   IMAGE_TAG="$image_tag" DOCKER_REGISTRY="$registry" docker-compose up -d
   log "服务启动完成，访问地址: http://localhost:${HOST_PORT:-3002}"
