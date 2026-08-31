@@ -18,7 +18,7 @@ export class AppService {
     return {
       status:
         database.status === 'ok' && tools.length > 0 ? 'ok' : 'degraded',
-      service: 'hotspot-v2-backend',
+      service: 'hotspot-agent-backend',
       checks: {
         database,
         tools: {

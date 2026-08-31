@@ -2,7 +2,7 @@
 
 ## 1. 本阶段目标
 
-第一阶段先在当前 `hotspot-v2-backend` 内实现逻辑独立的 Copilot API，而不是完整替换现有后台助手。
+第一阶段先在当前 `hotspot-agent-backend` 内实现逻辑独立的 Copilot API，而不是完整替换现有后台助手。
 
 目标是跑通：
 
@@ -20,7 +20,7 @@
 本阶段交付当前项目内的新模块：
 
 ```text
-hotspot-v2-backend/src/copilot
+hotspot-agent-backend/src/copilot
 ```
 
 ## 2. 本阶段不做什么
@@ -64,7 +64,7 @@ Model step
 ## 4. 当前项目目录结构
 
 ```text
-hotspot-v2-backend/
+hotspot-agent-backend/
   prisma/
     schema.prisma
   src/
@@ -324,7 +324,7 @@ evidence.search
 
 ### 任务一：Copilot 模块骨架
 
-在 `hotspot-v2-backend/src/copilot` 创建 Controller、Service、Types，并挂到 `AppModule`。
+在 `hotspot-agent-backend/src/copilot` 创建 Controller、Service、Types，并挂到 `AppModule`。
 
 验收：
 

@@ -5,7 +5,7 @@ describe('AppController', () => {
   it('exposes healthz as the same health check used by health', async () => {
     const health = {
       status: 'ok',
-      service: 'hotspot-v2-backend',
+      service: 'hotspot-agent-backend',
       checks: {},
     };
     const service = {

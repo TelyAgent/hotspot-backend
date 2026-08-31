@@ -37,5 +37,5 @@ Event / Opportunity
 以总架构文档中的“热点运营层”为准：
 
 ```text
-docs/hotspot-v2/SYSTEM_ARCHITECTURE_V2.md
+docs/hotspot-agent/SYSTEM_ARCHITECTURE_V2.md
 ```

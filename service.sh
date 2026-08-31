@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Hotspot V2 backend service management script.
+# Hotspot Agent backend service management script.
 # Usage: ./service.sh [start|stop|restart|logs|status|migrate|pull] [IMAGE_TAG]
 
 set -euo pipefail
@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PROJECT_NAME="hotspot-v2-backend"
+PROJECT_NAME="hotspot-agent-backend"
 DEFAULT_IMAGE_TAG="latest"
 DEFAULT_REGISTRY="10.168.0.2:5000"
 
@@ -96,7 +96,7 @@ status() {
 }
 
 help() {
-  echo "Hotspot V2 backend 服务管理脚本"
+  echo "Hotspot Agent backend 服务管理脚本"
   echo ""
   echo "使用方法:"
   echo "  ./service.sh [命令] [IMAGE_TAG]"

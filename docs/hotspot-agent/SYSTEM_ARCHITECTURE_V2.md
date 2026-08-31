@@ -463,7 +463,7 @@ Signal
 详细设计见：
 
 ```text
-docs/hotspot-v2/DATA_COLLECTION_PLUGIN_ARCHITECTURE.md
+docs/hotspot-agent/DATA_COLLECTION_PLUGIN_ARCHITECTURE.md
 ```
 
 ## 8. 信号层
@@ -544,7 +544,7 @@ FutureEvent
 详细设计见：
 
 ```text
-docs/hotspot-v2/FUTURE_EVENT_AGENT_ARCHITECTURE.md
+docs/hotspot-agent/FUTURE_EVENT_AGENT_ARCHITECTURE.md
 ```
 
 ## 10. 主题追踪层
@@ -591,7 +591,7 @@ Topic Candidate
 详细设计见：
 
 ```text
-docs/hotspot-v2/TOPIC_WATCH_AGENT_ARCHITECTURE.md
+docs/hotspot-agent/TOPIC_WATCH_AGENT_ARCHITECTURE.md
 ```
 
 ## 11. 机会挖掘层
@@ -636,7 +636,7 @@ Human Review Request
 详细设计见：
 
 ```text
-docs/hotspot-v2/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md
+docs/hotspot-agent/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md
 ```
 
 ## 12. 热点运营层

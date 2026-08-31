@@ -8,7 +8,7 @@
 
 **Tech Stack:** NestJS、TypeScript、Prisma、PostgreSQL、BullMQ、LangGraph、LLM Provider Adapter、Jest。
 
-**Spec:** `docs/hotspot-v2/SYSTEM_ARCHITECTURE_V2.md`
+**Spec:** `docs/hotspot-agent/SYSTEM_ARCHITECTURE_V2.md`
 
 ## Global Constraints
 

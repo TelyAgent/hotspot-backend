@@ -17,7 +17,7 @@ while getopts ":r:t:" opt; do
   esac
 done
 
-IMAGE_NAME=hotspot-v2-backend
+IMAGE_NAME=hotspot-agent-backend
 DOCKER_PUSH_REGISTRY=${DOCKER_PUSH_REGISTRY:-10.168.0.2:5000}
 
 if [[ -z "${IMAGE_TAG:-}" ]]; then

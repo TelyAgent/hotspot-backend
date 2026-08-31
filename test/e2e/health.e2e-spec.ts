@@ -17,7 +17,7 @@ describe('Health API', () => {
             health: jest.fn(() =>
               Promise.resolve({
                 status: 'ok',
-                service: 'hotspot-v2-backend',
+                service: 'hotspot-agent-backend',
                 checks: {
                   database: {
                     status: 'ok',
@@ -55,7 +55,7 @@ describe('Health API', () => {
         expect(response.body).toEqual(
           expect.objectContaining({
             status: 'ok',
-            service: 'hotspot-v2-backend',
+            service: 'hotspot-agent-backend',
             checks: expect.any(Object),
           }),
         );

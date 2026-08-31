@@ -1,4 +1,4 @@
-# Hotspot Monitor V2 Backend
+# Hotspot Agent Backend
 
 Hotspot Monitor V2 的新后端项目。
 
@@ -16,13 +16,13 @@ Hotspot Monitor V2 的新后端项目。
 架构文档位于：
 
 ```text
-docs/hotspot-v2
+docs/hotspot-agent
 ```
 
 实施计划：
 
 ```text
-docs/hotspot-v2/IMPLEMENTATION_PLAN.md
+docs/hotspot-agent/IMPLEMENTATION_PLAN.md
 ```
 
 ## 模型配置

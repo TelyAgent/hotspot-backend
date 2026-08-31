@@ -815,10 +815,10 @@ ACTION_CONFIRM_REQUIRED     需要用户确认
 ```json
 {
   "name": "topicWatch.account.add",
-  "ownerService": "hotspot-v2",
+  "ownerService": "hotspot-agent",
   "description": "给某个主题追踪配置添加监控账号",
   "permission": "confirmed_write",
-  "endpoint": "https://hotspot-v2.internal/tools/topic-watch/account/add",
+  "endpoint": "https://hotspot-agent.internal/tools/topic-watch/account/add",
   "inputSchema": {
     "type": "object",
     "required": ["topicWatchId", "handle"],
@@ -866,7 +866,7 @@ OpenTelemetry             链路追踪
 
 目标：
 
-- 在当前 `hotspot-v2-backend` 内新增 `copilot` 模块。
+- 在当前 `hotspot-agent-backend` 内新增 `copilot` 模块。
 - 建立会话、Agent Run、Tool Call、Proposed Action、Audit Log 表。
 - 提供 `/copilot/chat` 和 `/copilot/actions/{id}/confirm`。
 - 实现 Tool Registry 和 Tool Gateway。

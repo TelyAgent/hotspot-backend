@@ -8,7 +8,7 @@
 
 **Tech Stack:** NestJS, Prisma, PostgreSQL, Jest, TypeScript, 现有 Data Source Plugin, 现有 Agent Tool Registry, 现有 OpenAI/LangGraph Agent Workflow Engine。
 
-**Spec:** `/Users/qmk/work/hotspot-monitor/hotspot-v2-backend/docs/hotspot-v2/SYSTEM_ARCHITECTURE_V2.md`、`/Users/qmk/work/hotspot-monitor/hotspot-v2-backend/docs/hotspot-v2/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md`、`/Users/qmk/work/hotspot-monitor/hotspot-v2-backend/docs/hotspot-v2/TOPIC_WATCH_AGENT_ARCHITECTURE.md`
+**Spec:** `/Users/qmk/work/hotspot-monitor/hotspot-agent-backend/docs/hotspot-agent/SYSTEM_ARCHITECTURE_V2.md`、`/Users/qmk/work/hotspot-monitor/hotspot-agent-backend/docs/hotspot-agent/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md`、`/Users/qmk/work/hotspot-monitor/hotspot-agent-backend/docs/hotspot-agent/TOPIC_WATCH_AGENT_ARCHITECTURE.md`
 
 ## Global Constraints
 
@@ -1450,7 +1450,7 @@ Expected: PASS.
 Run backend checks:
 
 ```bash
-cd /Users/qmk/work/hotspot-monitor/hotspot-v2-backend
+cd /Users/qmk/work/hotspot-monitor/hotspot-agent-backend
 npm test -- test/unit/signal/enrichment/evidence-quality-gate.service.spec.ts test/unit/signal/enrichment/signal-evidence-enrichment.service.spec.ts test/unit/signal/enrichment/x-trend-evidence-enricher.spec.ts test/unit/signal/enrichment/youtube-video-evidence-enricher.spec.ts test/unit/signal/enrichment/topic-candidate-evidence-enricher.spec.ts test/unit/signal/enrichment/future-event-evidence-enricher.spec.ts --runInBand
 npm test -- test/unit/opportunity/labeling/event-domain-label.service.spec.ts test/unit/opportunity/labeling/event-labeling.service.spec.ts --runInBand
 npm test -- test/unit/opportunity/opportunity-mining-orchestrator.service.spec.ts test/unit/topic-watch/trigger/topic-watch-trigger.service.spec.ts test/unit/agent/openai-model-provider.spec.ts --runInBand

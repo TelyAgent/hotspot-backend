@@ -23,7 +23,7 @@ describe('AppService', () => {
 
     await expect(service.health()).resolves.toEqual({
       status: 'ok',
-      service: 'hotspot-v2-backend',
+      service: 'hotspot-agent-backend',
       checks: {
         database: {
           status: 'ok',

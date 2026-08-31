@@ -8,7 +8,7 @@
 
 **Tech Stack:** NestJS、TypeScript、Prisma、PostgreSQL、现有 Agent Workflow Engine、Tool Registry、Jest。
 
-**Spec:** `docs/hotspot-v2/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md`
+**Spec:** `docs/hotspot-agent/OPPORTUNITY_MINING_AGENT_WORKFLOW_ARCHITECTURE.md`
 
 ## Global Constraints
 

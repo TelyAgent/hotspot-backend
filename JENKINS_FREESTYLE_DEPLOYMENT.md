@@ -30,7 +30,7 @@ hotspot-agent-backend_prod_job
 如果后面想统一 V2 命名，也可以用：
 
 ```text
-hotspot-v2-backend_prod_job
+hotspot-agent-backend_prod_job
 ```
 
 但 Jenkins Job 名称、服务器部署目录、shell 里的路径要保持一致。
@@ -203,7 +203,6 @@ curl http://127.0.0.1:3002/healthz
 ```json
 {
   "status": "ok",
-  "service": "hotspot-v2-backend"
+  "service": "hotspot-agent-backend"
 }
 ```
-

@@ -8,7 +8,7 @@ services:
     ports:
       - "${POSTGRES_HOST_PORT:-5435}:5432"
     volumes:
-      - hotspot_v2_postgres_data:/var/lib/postgresql/data
+      - hotspot_agent_postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-hotspot_agent}"]
@@ -17,10 +17,10 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - hotspot-v2-backend-network
+      - hotspot-agent-backend-network
 
   backend:
-    image: ${DOCKER_REGISTRY:-10.168.0.2:5000}/hotspot-v2-backend:${IMAGE_TAG:-latest}
+    image: ${DOCKER_REGISTRY:-10.168.0.2:5000}/hotspot-agent-backend:${IMAGE_TAG:-latest}
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,7 +29,7 @@ services:
     env_file:
       - .env
     volumes:
-      - hotspot_v2_backend_logs:/app/logs
+      - hotspot_agent_backend_logs:/app/logs
       - ./private:/app/private:ro
     restart: unless-stopped
     healthcheck:
@@ -45,12 +45,12 @@ services:
       retries: 3
       start_period: 20s
     networks:
-      - hotspot-v2-backend-network
+      - hotspot-agent-backend-network
 
 volumes:
-  hotspot_v2_backend_logs:
-  hotspot_v2_postgres_data:
+  hotspot_agent_backend_logs:
+  hotspot_agent_postgres_data:
 
 networks:
-  hotspot-v2-backend-network:
+  hotspot-agent-backend-network:
     driver: bridge
