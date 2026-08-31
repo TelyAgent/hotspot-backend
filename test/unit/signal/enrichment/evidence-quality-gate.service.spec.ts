@@ -97,4 +97,31 @@ describe('EvidenceQualityGateService', () => {
       }),
     );
   });
+
+  it('treats x_post evidence records as usable reason evidence', () => {
+    const service = new EvidenceQualityGateService();
+
+    const result = service.evaluate({
+      signalType: 'x_post',
+      evidenceItems: [
+        {
+          id: 'ev_topic_post',
+          sourceType: 'x_post',
+          claim: 'Polymarket 发布了帖子。',
+          text: 'Polymarket 发布了新的预测市场说明，引发用户讨论。',
+          url: 'https://x.com/Polymarket/status/2',
+          author: 'Polymarket',
+          confidence: 'high',
+        },
+      ],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        level: 'usable',
+        canCreateEvent: true,
+        hasReasonEvidence: true,
+      }),
+    );
+  });
 });

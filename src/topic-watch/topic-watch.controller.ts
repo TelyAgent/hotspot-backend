@@ -4,6 +4,7 @@ import { TopicWatchSingleTriggerPolicy } from './topic-watch.types';
 import { TopicCandidateDetailService } from './candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from './decision/topic-watch-agent.service';
+import { TopicWatchPostLeaderboardService } from './leaderboard/topic-watch-post-leaderboard.service';
 import { TopicWatchPipelineStatusService } from './status/topic-watch-pipeline-status.service';
 import { TopicWatchRepository } from './topic-watch.repository';
 
@@ -14,6 +15,7 @@ export class TopicWatchController {
     private readonly topicWatchAgentService: TopicWatchAgentService,
     private readonly topicWatchCollectionService: TopicWatchCollectionService,
     private readonly topicCandidateDetailService: TopicCandidateDetailService,
+    private readonly topicWatchPostLeaderboardService: TopicWatchPostLeaderboardService,
     private readonly topicWatchPipelineStatusService: TopicWatchPipelineStatusService,
   ) {}
 
@@ -155,6 +157,17 @@ export class TopicWatchController {
   @Get(':id/candidates')
   listCandidates(@Param('id') id: string) {
     return this.topicWatchRepository.listCandidates(id);
+  }
+
+  @Get(':id/post-leaderboard')
+  async getPostLeaderboard(@Param('id') id: string) {
+    const topicWatch = await this.topicWatchRepository.findTopicWatchById(id);
+    if (!topicWatch) return null;
+
+    return this.topicWatchPostLeaderboardService.getTopicLeaderboard({
+      topicWatchId: topicWatch.id,
+      topicWatchName: topicWatch.name,
+    });
   }
 
   @Get(':id/candidates/:candidateId/posts')

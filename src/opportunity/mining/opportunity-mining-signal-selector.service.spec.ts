@@ -1,6 +1,20 @@
 import { OpportunityMiningSignalSelectorService } from './opportunity-mining-signal-selector.service';
+import { OpportunityRulePackLoaderService } from '../rule-pack/opportunity-rule-pack-loader.service';
 
 describe('OpportunityMiningSignalSelectorService', () => {
+  it('loads topic watch account post signals from the preset x_post route', async () => {
+    const rulePackLoader = new OpportunityRulePackLoaderService();
+
+    const rulePack = await rulePackLoader.loadPresetRulePack();
+
+    expect(rulePack.routes).toContainEqual(
+      expect.objectContaining({
+        signalType: 'x_post',
+        documents: expect.arrayContaining(['topic-watch-rules']),
+      }),
+    );
+  });
+
   it('keeps future event signals below action score 80 out of automatic event mining', async () => {
     const now = new Date('2026-08-27T00:00:00.000Z');
     const prisma = {

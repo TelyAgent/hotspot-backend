@@ -72,4 +72,54 @@ describe('OpportunityMiningSchedulerService', () => {
       succeededCount: 1,
     });
   });
+
+  it('runs topic watch x_post signals with the hot topic mining goal', async () => {
+    const selector = {
+      select: jest.fn(() =>
+        Promise.resolve([
+          {
+            id: 'sig_topic_post',
+            signalType: 'x_post',
+            source: 'topic_watch',
+            platform: 'x',
+          },
+        ]),
+      ),
+    } as unknown as OpportunityMiningSignalSelectorService;
+    const orchestrator = {
+      createGoal: jest.fn((input) => input),
+      run: jest.fn().mockResolvedValue({
+        decision: {
+          decision: 'ignore',
+        },
+      }),
+    } as unknown as OpportunityMiningOrchestratorService;
+    const service = new OpportunityMiningSchedulerService(
+      {
+        get: jest.fn((key: string) => {
+          if (key === 'OPPORTUNITY_MINING_SCHEDULER_ENABLED') {
+            return 'true';
+          }
+
+          return undefined;
+        }),
+      } as unknown as ConfigService,
+      selector,
+      orchestrator,
+    );
+
+    await service.runDueMining(new Date('2026-08-28T08:00:00.000Z'));
+
+    expect(orchestrator.createGoal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'analyze_hot_topic',
+        seedSignalIds: ['sig_topic_post'],
+        sourceContext: expect.objectContaining({
+          signalType: 'x_post',
+          source: 'topic_watch',
+          platform: 'x',
+        }),
+      }),
+    );
+  });
 });

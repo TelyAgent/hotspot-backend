@@ -19,7 +19,7 @@ routes:
     lookbackHours: 24
     batchLimit: 10
     priority: high
-  x_account_post:
+  x_post:
     documents:
       - global-principles
       - source-routing
@@ -69,4 +69,3 @@ routes:
 - 如果 Signal 类型未知，使用 default 路由。
 - 如果规则文档需要更多证据，总 Agent 可以调用工具补充。
 - 运营人员可以通过修改本文件调整哪些来源优先进入挖掘。
-

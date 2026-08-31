@@ -2,10 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { JsonObject } from '../../common/types/json.type';
 import { CollectionRunnerService } from '../../data-source/runner/collection-runner.service';
-import { TopicAggregationService } from '../aggregation/topic-aggregation.service';
 import { TopicWatchRepository } from '../topic-watch.repository';
 import { TopicMonitoringPlan } from '../topic-watch.types';
-import { TopicWatchTriggerService } from '../trigger/topic-watch-trigger.service';
 
 export interface TopicWatchCollectionInput {
   topicWatchId?: string;
@@ -45,8 +43,6 @@ export class TopicWatchCollectionService {
   constructor(
     private readonly topicWatchRepository: TopicWatchRepository,
     private readonly collectionRunner: CollectionRunnerService,
-    private readonly topicAggregationService: TopicAggregationService,
-    private readonly topicWatchTriggerService: TopicWatchTriggerService,
   ) {}
 
   async collect(
@@ -115,28 +111,6 @@ export class TopicWatchCollectionService {
           rawItemCount: run.rawItemCount,
           errorMessage: run.errorMessage,
         });
-      }
-
-      const signals = await this.topicWatchRepository.listSignalsForTopicWatch({
-        topicWatchId: topicWatch.id,
-        windowStartAt,
-        windowEndAt: observedAt,
-      });
-
-      if (signals.length > 0) {
-        const candidates = await this.topicAggregationService.aggregate({
-          topicWatchId: topicWatch.id,
-          windowStartAt,
-          windowEndAt: observedAt,
-          signals,
-        });
-        result.candidateCount += candidates.length;
-        const triggerResult =
-          await this.topicWatchTriggerService.evaluateAndTrigger({
-            topicWatch,
-            candidates,
-          });
-        result.triggeredCount += triggerResult.triggeredCount;
       }
     }
 

@@ -1,5 +1,4 @@
 import { CollectionRunnerService } from '../../../src/data-source/runner/collection-runner.service';
-import { TopicAggregationService } from '../../../src/topic-watch/aggregation/topic-aggregation.service';
 import { TopicWatchCollectionService } from '../../../src/topic-watch/collection/topic-watch-collection.service';
 import { TopicWatchRepository } from '../../../src/topic-watch/topic-watch.repository';
 
@@ -37,28 +36,6 @@ describe('TopicWatchCollectionService', () => {
           },
         }),
       ),
-      listSignalsForTopicWatch: jest.fn(() =>
-        Promise.resolve([
-          {
-            id: 'sig_1',
-            rawItemId: 'raw_1',
-            source: 'x',
-            platform: 'x',
-            signalType: 'x_post',
-            title: 'OpenAI 发布新模型',
-            summary: 'OpenAI 发布新模型',
-            observedAt: new Date('2026-08-24T11:00:00.000Z'),
-            rawRefs: ['raw_1'],
-            metrics: null,
-            metadata: {
-              topicWatchId: 'topic_ai',
-              authorHandles: ['OpenAI'],
-            },
-            createdAt: new Date('2026-08-24T11:00:00.000Z'),
-            updatedAt: new Date('2026-08-24T11:00:00.000Z'),
-          },
-        ]),
-      ),
     } as unknown as TopicWatchRepository;
     const runner = {
       run: jest.fn(() =>
@@ -73,19 +50,9 @@ describe('TopicWatchCollectionService', () => {
         }),
       ),
     } as unknown as CollectionRunnerService;
-    const aggregationService = {
-      aggregate: jest.fn(() =>
-        Promise.resolve([
-          {
-            id: 'candidate_1',
-          },
-        ]),
-      ),
-    } as unknown as TopicAggregationService;
     const service = new TopicWatchCollectionService(
       repository,
       runner,
-      aggregationService,
     );
 
     const result = await service.collect({
@@ -115,19 +82,8 @@ describe('TopicWatchCollectionService', () => {
         rawItemCount: 3,
         signalCount: 3,
         evidenceCount: 3,
-        candidateCount: 1,
-      }),
-    );
-    expect(repository.listSignalsForTopicWatch).toHaveBeenCalledWith({
-      topicWatchId: 'topic_ai',
-      windowStartAt: new Date('2026-08-24T09:00:00.000Z'),
-      windowEndAt: new Date('2026-08-24T12:00:00.000Z'),
-    });
-    expect(aggregationService.aggregate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        topicWatchId: 'topic_ai',
-        windowStartAt: new Date('2026-08-24T09:00:00.000Z'),
-        windowEndAt: new Date('2026-08-24T12:00:00.000Z'),
+        candidateCount: 0,
+        triggeredCount: 0,
       }),
     );
   });

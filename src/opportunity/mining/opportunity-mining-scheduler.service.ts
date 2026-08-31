@@ -109,7 +109,7 @@ export class OpportunityMiningSchedulerService implements OnModuleInit, OnModule
       return 'future_event_response';
     }
 
-    if (signal.signalType === 'x_account_post') {
+    if (signal.signalType === 'x_account_post' || signal.signalType === 'x_post') {
       return 'analyze_hot_topic';
     }
 

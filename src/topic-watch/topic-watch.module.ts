@@ -7,6 +7,7 @@ import { TopicCandidateDetailService } from './candidate-detail/topic-candidate-
 import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from './decision/topic-watch-agent.service';
 import { TopicWatchDefaultsService } from './defaults/topic-watch-defaults.service';
+import { TopicWatchPostLeaderboardService } from './leaderboard/topic-watch-post-leaderboard.service';
 import { TopicMonitoringPlanService } from './monitoring-plan/topic-monitoring-plan.service';
 import { TopicWatchSchedulerService } from './scheduler/topic-watch-scheduler.service';
 import { TopicWatchPipelineStatusService } from './status/topic-watch-pipeline-status.service';
@@ -24,6 +25,7 @@ import { TopicWatchTriggerService } from './trigger/topic-watch-trigger.service'
     TopicWatchSchedulerService,
     TopicAggregationService,
     TopicCandidateDetailService,
+    TopicWatchPostLeaderboardService,
     TopicWatchPipelineStatusService,
     TopicWatchTriggerService,
     TopicMonitoringPlanService,
@@ -36,6 +38,7 @@ import { TopicWatchTriggerService } from './trigger/topic-watch-trigger.service'
     TopicWatchSchedulerService,
     TopicAggregationService,
     TopicCandidateDetailService,
+    TopicWatchPostLeaderboardService,
     TopicWatchPipelineStatusService,
     TopicWatchTriggerService,
     TopicMonitoringPlanService,

@@ -6,6 +6,7 @@ import {
 
 const REASON_EVIDENCE_SOURCE_TYPES = new Set([
   'x_account_post',
+  'x_post',
   'x_trend_related_post',
   'topic_representative_post',
   'youtube_transcript_analysis',
