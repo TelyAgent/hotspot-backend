@@ -201,4 +201,114 @@ describe('OperationRecommendationService', () => {
       decision: agentDecision,
     });
   });
+
+  it('passes same-domain PredX news to the agent even when text overlap is weak', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    const event = {
+      id: 'event_geopolitics',
+      title: '区域冲突风险升温',
+      eventType: 'industry_topic',
+      summary: '多个来源正在讨论区域冲突风险。',
+      labels: [{ name: 'Geopolitics & Conflict' }],
+      evidenceRefs: ['evidence_3'],
+      missingData: [],
+      riskNotes: [],
+      confidence: 'medium',
+      status: 'suggested',
+      occurredAt: null,
+      createdAt: new Date('2026-09-01T08:00:00.000Z'),
+      updatedAt: new Date('2026-09-01T08:05:00.000Z'),
+    };
+    const news = {
+      id: 'news_geopolitics',
+      externalId: 'predx_news_1',
+      eventId: null,
+      factId: null,
+      title: 'Kyiv air defense gap draws new market attention',
+      newsTitle: 'Kyiv air defense gap draws new market attention',
+      sourceName: 'PredX',
+      sourceUrl: 'https://predx.pro/news/1',
+      category: 'geopolitics',
+      publishedAt: new Date('2026-09-01T07:30:00.000Z'),
+      latestAt: null,
+      primaryMarketTitle: 'Will Ukraine strike another tanker?',
+      primaryMarketUrl: 'https://predx.pro/market/1',
+      primaryMarketConfidence: null,
+      associatedMarketDisplayScore: null,
+      relatedMarkets: [],
+      raw: {},
+      createdAt: new Date('2026-09-01T07:30:00.000Z'),
+      updatedAt: new Date('2026-09-01T07:30:00.000Z'),
+    };
+    const agentDecision = {
+      title: '区域冲突风险升温 × PredX 承接选题',
+      summary: '该事件可从冲突风险和预测市场反应角度承接。',
+      recommendationLabels: ['产品价值'],
+      basis: 'product',
+      priority: 'today',
+      reason: '同领域 PredX 新闻提供了可判断上下文。',
+      predxOpportunity: {
+        status: 'supported',
+        associationLevel: 'L3_thematic',
+        rationale: '同属地缘冲突领域。',
+        selectedProductValue: '跟踪事件后续和市场反应。',
+        recommendedProductPage: 'news',
+        recommendedProductUrl: 'https://predx.pro/news',
+        urlReason: '适合进入新闻页。',
+      },
+      angles: [
+        {
+          level: 'L3_thematic',
+          claim: '从冲突风险的后续变量切入。',
+          evidence: ['evidence_3'],
+          riskNotes: [],
+        },
+      ],
+      evidenceRefs: ['evidence_3'],
+      missingData: [],
+      riskNotes: [],
+      confidence: 'medium',
+    };
+    const repository = {
+      listRecentEvents: jest.fn().mockResolvedValue([event]),
+      listPredxNewsItems: jest.fn().mockResolvedValue([news]),
+      createRecommendation: jest.fn().mockResolvedValue({ id: 'rec_domain' }),
+    };
+    const predxNewsClient = {
+      fetchLatest: jest.fn().mockResolvedValue([]),
+    };
+    const agent = {
+      decide: jest.fn().mockResolvedValue({
+        decision: agentDecision,
+        agentRunId: 'agent_run_domain',
+      }),
+    };
+    const service = new OperationRecommendationService(
+      repository as never,
+      predxNewsClient as never,
+      agent as never,
+      new ConfigService(),
+    );
+
+    await service.generate({ eventTake: 1, newsTake: 1 });
+
+    expect(agent.decide).toHaveBeenCalledWith({
+      event: expect.objectContaining({
+        id: 'event_geopolitics',
+      }),
+      predxNews: [
+        expect.objectContaining({
+          id: 'news_geopolitics',
+          category: 'geopolitics',
+        }),
+      ],
+      productReference: expect.any(String),
+    });
+    expect(repository.createRecommendation).toHaveBeenCalledWith({
+      sourceEventId: 'event_geopolitics',
+      predxNewsItemId: null,
+      agentRunId: 'agent_run_domain',
+      decision: agentDecision,
+    });
+  });
 });

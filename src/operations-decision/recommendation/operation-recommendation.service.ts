@@ -45,13 +45,17 @@ export class OperationRecommendationService {
 
     for (const event of events) {
       const relatedNews = this.pickRelatedNews(event, newsItems);
+      const predxContext = this.buildPredxContext(event, newsItems, relatedNews);
       const publicHeat = this.detectPublicHeatPath(event);
+      const productValue = this.detectProductValuePath(event);
       const canAskAgent = Boolean(this.configService.get<string>('OPENAI_API_KEY'));
 
       let decision = relatedNews.length
         ? this.createFallbackDecision(event, relatedNews[0])
         : publicHeat
           ? this.createPublicHeatDecision(event)
+          : productValue
+            ? this.createProductValueDecision(event)
           : undefined;
       let agentRunId: string | undefined;
 
@@ -65,16 +69,25 @@ export class OperationRecommendationService {
                 ? '事件代表内容进入 X 短时增速排行榜前 3，满足公共热度推荐路径。'
                 : null,
               relatedPredxNewsCount: relatedNews.length,
+              predxContextCount: predxContext.length,
+              productValue,
+              productValueReason: productValue
+                ? '事件领域或标签命中 PredX 可承接范围，可按 L3/L4 产品价值路径判断。'
+                : null,
             },
           },
-          predxNews: relatedNews.slice(0, 4).map(serializeNews),
+          predxNews: predxContext.map(serializeNews),
           productReference,
         });
         if (agentResult.skipped && !decision) {
           continue;
         }
         if (agentResult.decision?.angles.length) {
-          decision = agentResult.decision;
+          decision = this.sanitizeDecisionPaths(agentResult.decision, {
+            publicHeat,
+            hasRelatedMarket: relatedNews.some(newsHasMarket),
+            productValue,
+          });
           if (publicHeat) {
             decision = withPublicHeatLabel(decision);
           }
@@ -85,6 +98,11 @@ export class OperationRecommendationService {
       if (!decision) {
         continue;
       }
+      decision = this.sanitizeDecisionPaths(decision, {
+        publicHeat,
+        hasRelatedMarket: relatedNews.some(newsHasMarket),
+        productValue,
+      });
 
       created.push(await this.repository.createRecommendation({
         sourceEventId: event.id,
@@ -96,6 +114,8 @@ export class OperationRecommendationService {
 
     return {
       syncedPredxNewsCount: synced.count,
+      candidateEventCount: events.length,
+      predxNewsCount: newsItems.length,
       generatedCount: created.length,
       items: created,
     };
@@ -247,6 +267,36 @@ export class OperationRecommendationService {
       .map((item) => item.news);
   }
 
+  private buildPredxContext(
+    event: Event,
+    newsItems: PredxNewsItem[],
+    relatedNews: PredxNewsItem[],
+  ): PredxNewsItem[] {
+    const domainRelatedNews = this.pickDomainRelatedNews(event, newsItems);
+    return uniqueNewsItems([
+      ...relatedNews,
+      ...domainRelatedNews,
+      ...newsItems.slice(0, 6),
+    ]).slice(0, 8);
+  }
+
+  private pickDomainRelatedNews(event: Event, newsItems: PredxNewsItem[]): PredxNewsItem[] {
+    const domains = getLabelNames(event.labels);
+    const wantedCategories = new Set(
+      domains.flatMap((label) => mapEventLabelToPredxCategories(label)),
+    );
+    if (!wantedCategories.size) {
+      return [];
+    }
+
+    return newsItems
+      .filter((news) => {
+        const category = (news.category ?? '').toLowerCase();
+        return [...wantedCategories].some((item) => category.includes(item));
+      })
+      .slice(0, 4);
+  }
+
   private createFallbackDecision(
     event: Event,
     news: PredxNewsItem,
@@ -278,7 +328,7 @@ export class OperationRecommendationService {
           : '把热点新闻整理成事件，并从预测和不确定性角度理解后续变化。',
         recommendedProductPage: hasMarket ? 'market' : 'news',
         recommendedProductUrl: hasMarket
-          ? news.primaryMarketUrl ?? 'https://predx.pro/market'
+          ? news?.primaryMarketUrl ?? 'https://predx.pro/market'
           : 'https://predx.pro/news',
         urlReason: hasMarket
           ? '存在接口返回的相关 Polymarket 市场。'
@@ -350,6 +400,61 @@ export class OperationRecommendationService {
     };
   }
 
+  private createProductValueDecision(
+    event: Event,
+    news?: PredxNewsItem,
+  ): OperationRecommendationDecision {
+    const evidenceRefs = getStringArray(event.evidenceRefs);
+    const hasMarket = newsHasMarket(news);
+    const labels = ['产品价值', ...getProductValueLabels(event, news)].filter(
+      (item, index, arr) => arr.indexOf(item) === index,
+    );
+
+    return {
+      title: `${event.title} × PredX 产品承接选题`,
+      summary: `该热点可从事件不确定性、后续走向或市场预期变化切入，作为 PredX 运营选题候选。`,
+      recommendationLabels: labels,
+      basis: 'product',
+      priority: isRecent(event.createdAt, 6) ? 'immediate' : 'today',
+      reason: '事件领域或语义命中 PredX 产品承接范围，满足产品价值推荐路径；当前不要求存在精确市场匹配。',
+      predxOpportunity: {
+        status: 'supported',
+        associationLevel: 'L3_thematic',
+        rationale: '热点适合被整理成可跟踪的事件线索，并用概率、市场反应或后续观察点承接。',
+        selectedProductValue: '帮助用户从热点事实进入 PredX 的新闻、事件和预测市场观察。',
+        recommendedProductPage: hasMarket ? 'market' : 'news',
+        recommendedProductUrl: hasMarket ? (news?.primaryMarketUrl ?? 'https://predx.pro/market') : 'https://predx.pro/news',
+        urlReason: hasMarket
+          ? '当前上下文中存在可参考的 PredX 相关市场。'
+          : '当前更适合进入 PredX News 作为热点承接入口。',
+      },
+      angles: [
+        {
+          level: 'L3_thematic',
+          claim: `从“${event.title}”的后续走向切入，解释用户为什么可以用 PredX 持续跟踪事件变化。`,
+          targetUser: '关注热点后续发展和市场反应的用户',
+          userValue: '把分散热点转成可观察的问题、时间线和后续变量。',
+          evidence: evidenceRefs.length ? evidenceRefs : [event.id],
+          productUrl: 'https://predx.pro/news',
+          riskNotes: ['不要把预测或市场价格写成事实结论，避免投资建议。'],
+        },
+        {
+          level: 'L4_conceptual',
+          claim: '用“已知事实、未知变量、下一观察点”的结构降低热点理解门槛。',
+          targetUser: '需要快速判断热点价值的新用户',
+          userValue: '让用户理解 PredX 不只是看新闻，而是跟踪事件不确定性。',
+          evidence: evidenceRefs.length ? evidenceRefs : [event.id],
+          productUrl: 'https://predx.pro/news',
+          riskNotes: ['如果缺少直接市场，表达时要明确这是产品价值承接，不是市场已匹配。'],
+        },
+      ],
+      evidenceRefs,
+      missingData: news ? [] : ['尚未找到精确匹配的 PredX 市场或新闻。'],
+      riskNotes: ['产品承接基于主题和使用场景相关性，需要运营人员最终选择角度。'],
+      confidence: normalizeConfidence(event.confidence, 'medium'),
+    };
+  }
+
   private detectPublicHeatPath(event: Event): boolean {
     const sourceSummary = toJsonObject(event.sourceSummary);
     const rank =
@@ -361,6 +466,82 @@ export class OperationRecommendationService {
     }
 
     return getLabelNames(event.labels).includes('公共热度');
+  }
+
+  private detectProductValuePath(event: Event): boolean {
+    const labelNames = getLabelNames(event.labels);
+    return labelNames.some((label) => PRODUCT_VALUE_EVENT_LABELS.has(label));
+  }
+
+  private sanitizeDecisionPaths(
+    decision: OperationRecommendationDecision,
+    paths: { publicHeat: boolean; hasRelatedMarket: boolean; productValue: boolean },
+  ): OperationRecommendationDecision {
+    const recommendationLabels = decision.recommendationLabels.filter((label) => {
+      if (label === '公共热度') return paths.publicHeat;
+      if (label === '实时市场') return paths.hasRelatedMarket;
+      return true;
+    });
+    if (paths.productValue && !recommendationLabels.includes('产品价值')) {
+      recommendationLabels.unshift('产品价值');
+    }
+
+    const basis =
+      decision.basis === 'heat' && !paths.publicHeat
+        ? paths.hasRelatedMarket
+          ? 'market'
+          : 'product'
+        : decision.basis === 'market' && !paths.hasRelatedMarket
+          ? paths.productValue
+            ? 'product'
+            : 'product'
+          : decision.basis;
+    const needsDowngradeMarket =
+      !paths.hasRelatedMarket &&
+      (decision.predxOpportunity.associationLevel === 'L1_direct' ||
+        decision.predxOpportunity.associationLevel === 'L2_analogous' ||
+        decision.predxOpportunity.recommendedProductPage === 'market');
+
+    return {
+      ...decision,
+      recommendationLabels: recommendationLabels.length
+        ? recommendationLabels
+        : [basis === 'heat' ? '公共热度' : basis === 'market' ? '实时市场' : '产品价值'],
+      basis,
+      angles: decision.angles.map((angle) => {
+        const angleNeedsDowngrade =
+          !paths.hasRelatedMarket &&
+          (angle.level === 'L1_direct' ||
+            angle.level === 'L2_analogous' ||
+            angle.productUrl?.includes('/market'));
+        return angleNeedsDowngrade
+          ? {
+              ...angle,
+              level: 'L3_thematic',
+              productUrl: 'https://predx.pro/news',
+              riskNotes: [
+                ...angle.riskNotes,
+                '当前没有直接相关市场匹配，不能按实时市场路径表达。',
+              ],
+            }
+          : angle;
+      }),
+      predxOpportunity: {
+        ...decision.predxOpportunity,
+        associationLevel: needsDowngradeMarket
+          ? 'L3_thematic'
+          : decision.predxOpportunity.associationLevel,
+        recommendedProductPage: needsDowngradeMarket
+          ? 'news'
+          : decision.predxOpportunity.recommendedProductPage,
+        recommendedProductUrl: needsDowngradeMarket
+          ? 'https://predx.pro/news'
+          : decision.predxOpportunity.recommendedProductUrl,
+        urlReason: needsDowngradeMarket
+          ? '当前没有直接相关市场匹配，先进入 PredX News 做事件承接。'
+          : decision.predxOpportunity.urlReason,
+      },
+    };
   }
 
   private async loadProductReference(): Promise<string> {
@@ -380,6 +561,7 @@ function serializeEvent(event: Event): JsonObject {
     occurredAt: event.occurredAt?.toISOString() ?? null,
     labels: (event.labels ?? null) as JsonValue,
     evidenceRefs: event.evidenceRefs as JsonValue,
+    sourceSummary: event.sourceSummary as JsonValue,
     createdAt: event.createdAt.toISOString(),
   };
 }
@@ -427,8 +609,8 @@ function tokenize(text: string): string[] {
     .filter((token) => token.length >= 3);
 }
 
-function newsHasMarket(news: PredxNewsItem): boolean {
-  return Boolean(news.primaryMarketTitle && news.primaryMarketUrl);
+function newsHasMarket(news?: PredxNewsItem): boolean {
+  return Boolean(news?.primaryMarketTitle && news.primaryMarketUrl);
 }
 
 function isRecent(date: Date, hours: number): boolean {
@@ -441,6 +623,60 @@ function mapCategoryLabel(category: string): string {
   if (/crypto|web3/i.test(category)) return 'Crypto & Web3';
   if (/election|politic/i.test(category)) return 'Politics & Elections';
   return 'Prediction Markets';
+}
+
+const PRODUCT_VALUE_EVENT_LABELS = new Set([
+  'AI',
+  'Technology',
+  'Politics & Elections',
+  'Geopolitics & Conflict',
+  'Macro & Financial Markets',
+  'Crypto & Web3',
+  'Prediction Markets',
+  'Official Schedule',
+]);
+
+function mapEventLabelToPredxCategories(label: string): string[] {
+  switch (label) {
+    case 'Politics & Elections':
+      return ['politic', 'election'];
+    case 'Geopolitics & Conflict':
+      return ['geopolitic', 'military', 'war', 'conflict'];
+    case 'Macro & Financial Markets':
+      return ['macro', 'financial', 'econom', 'trade', 'fiscal'];
+    case 'Crypto & Web3':
+      return ['crypto', 'web3'];
+    case 'Prediction Markets':
+      return ['prediction', 'market'];
+    case 'AI':
+    case 'Technology':
+      return ['technology', 'ai'];
+    case 'Official Schedule':
+      return ['macro', 'financial', 'econom'];
+    default:
+      return [];
+  }
+}
+
+function getProductValueLabels(event: Event, news?: PredxNewsItem): string[] {
+  const labels = getLabelNames(event.labels).filter((label) =>
+    PRODUCT_VALUE_EVENT_LABELS.has(label),
+  );
+  if (news?.category) {
+    labels.push(mapCategoryLabel(news.category));
+  }
+  return labels;
+}
+
+function uniqueNewsItems(newsItems: PredxNewsItem[]): PredxNewsItem[] {
+  const seen = new Set<string>();
+  return newsItems.filter((news) => {
+    if (seen.has(news.id)) {
+      return false;
+    }
+    seen.add(news.id);
+    return true;
+  });
 }
 
 function getLabelNames(labels: unknown): string[] {
