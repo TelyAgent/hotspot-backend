@@ -668,6 +668,126 @@ model Event {
   @@map("events")
 }
 
+model PredxNewsItem {
+  id                           String   @id @default(cuid())
+  externalId                   String   @unique
+  eventId                      String?
+  factId                       String?
+  title                        String
+  newsTitle                    String?
+  sourceName                   String?
+  sourceUrl                    String?
+  category                     String?
+  publishedAt                  DateTime
+  latestAt                     DateTime?
+  primaryMarketTitle           String?
+  primaryMarketUrl             String?
+  primaryMarketConfidence      Float?
+  associatedMarketDisplayScore Float?
+  relatedMarkets               Json
+  raw                          Json
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  recommendations OperationRecommendation[]
+
+  @@index([publishedAt])
+  @@index([category])
+  @@map("predx_news_items")
+}
+
+model OperationContextInboxItem {
+  id          String   @id @default(cuid())
+  title       String
+  source      String
+  sourceUrl   String?
+  rawContent  String
+  summary     String?
+  quality     String
+  status      String
+  conclusion  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@map("operation_context_inbox_items")
+}
+
+model OperationRecommendation {
+  id                         String   @id @default(cuid())
+  sourceEventId              String?
+  predxNewsItemId            String?
+  title                      String
+  summary                    String
+  recommendationLabels       Json
+  basis                      String
+  priority                   String
+  reason                     String
+  productAssociationStatus   String
+  productAssociationLevel    String
+  productAssociationRationale String
+  selectedProductValue       String?
+  recommendedProductPage     String?
+  recommendedProductUrl      String?
+  urlReason                  String?
+  evidenceRefs               Json
+  riskNotes                  Json
+  missingData                Json
+  status                     String
+  confidence                 String
+  agentRunId                 String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  predxNewsItem PredxNewsItem? @relation(fields: [predxNewsItemId], references: [id], onDelete: SetNull)
+  angles        OperationRecommendationAngle[]
+  records       OperationDecisionRecord[]
+
+  @@index([status, createdAt])
+  @@index([sourceEventId])
+  @@index([predxNewsItemId])
+  @@map("operation_recommendations")
+}
+
+model OperationRecommendationAngle {
+  id               String   @id @default(cuid())
+  recommendationId String
+  level            String
+  claim            String
+  targetUser       String?
+  userValue        String?
+  evidence         Json
+  productUrl       String?
+  riskNotes        Json
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  recommendation OperationRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([recommendationId, sortOrder])
+  @@map("operation_recommendation_angles")
+}
+
+model OperationDecisionRecord {
+  id                String   @id @default(cuid())
+  recommendationId  String
+  result            String
+  finalAngle        String?
+  note              String?
+  operator          String?
+  regenCount        Int      @default(0)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  recommendation OperationRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([recommendationId, createdAt])
+  @@index([result, createdAt])
+  @@map("operation_decision_records")
+}
+
 model EventSourceContext {
   id              String   @id @default(cuid())
   mainEventId     String?

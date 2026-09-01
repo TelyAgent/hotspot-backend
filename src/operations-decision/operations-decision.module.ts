@@ -1,0 +1,21 @@
+import { Module } from '@nestjs/common';
+import { AgentModule } from '../agent/agent.module';
+import { OperationsDecisionController } from './operations-decision.controller';
+import { OperationsDecisionRepository } from './operations-decision.repository';
+import { PredxNewsClientService } from './predx-news/predx-news-client.service';
+import { PredxNewsNormalizerService } from './predx-news/predx-news-normalizer.service';
+import { OperationRecommendationAgentService } from './recommendation/operation-recommendation-agent.service';
+import { OperationRecommendationService } from './recommendation/operation-recommendation.service';
+
+@Module({
+  imports: [AgentModule],
+  controllers: [OperationsDecisionController],
+  providers: [
+    OperationsDecisionRepository,
+    PredxNewsClientService,
+    PredxNewsNormalizerService,
+    OperationRecommendationAgentService,
+    OperationRecommendationService,
+  ],
+})
+export class OperationsDecisionModule {}

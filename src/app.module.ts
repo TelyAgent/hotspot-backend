@@ -12,6 +12,7 @@ import { CopilotModule } from './copilot/copilot.module';
 import { EventMergeModule } from './event-merge/event-merge.module';
 import { FutureEventModule } from './future-event/future-event.module';
 import { OpportunityModule } from './opportunity/opportunity.module';
+import { OperationsDecisionModule } from './operations-decision/operations-decision.module';
 import { PerformanceModule } from './performance/performance.module';
 import { ProjectConfigModule } from './project-config/project-config.module';
 import { SignalModule } from './signal/signal.module';
@@ -32,6 +33,7 @@ import { YoutubeModule } from './youtube/youtube.module';
     FutureEventModule,
     TopicWatchModule,
     OpportunityModule,
+    OperationsDecisionModule,
     AssignmentModule,
     ContentModule,
     CopilotModule,

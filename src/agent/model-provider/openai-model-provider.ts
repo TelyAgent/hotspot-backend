@@ -170,6 +170,16 @@ export class OpenAiModelProvider implements ModelProvider {
         '最终输出必须严格为：',
         '{"type":"final_decision","decision":{"markdown":"修改后的完整 Markdown 文档","changeSummary":"中文修改摘要","suggestions":["启用前应注意的测试建议或风险"]}}',
       ].join('\n'),
+      operations_decision: [
+        '当前 agentType=operations_decision。',
+        '你要根据 goal.event、goal.predxNews 和 goal.productReference 判断是否生成 PredX 运营选题推荐。',
+        '只输出选题推荐与候选角度，不生成最终内容，不发布内容。',
+        '必须严格遵守 PredX 产品承接规则：L1/L2 必须有市场匹配来源；none 不生成产品承接角度；不得声称 PredX 是 Polymarket 官方产品。',
+        '所有 title、summary、reason、角度、风险必须使用中文；PredX、Polymarket、市场标题等专有名词可保留英文。',
+        '如果不能自然承接，输出 {"status":"none"}。',
+        '最终输出必须严格为：',
+        '{"type":"final_decision","decision":{"status":"supported|none","title":"中文选题标题","summary":"中文事件摘要","recommendationLabels":["公共热度|实时市场|产品价值"],"basis":"heat|market|product","priority":"immediate|today","reason":"为什么进入推荐","predxOpportunity":{"status":"supported|none","associationLevel":"L1_direct|L2_analogous|L3_thematic|L4_conceptual|none","rationale":"连接层级理由","selectedProductValue":"产品价值","recommendedProductPage":"home|news|market|signal","recommendedProductUrl":"官方链接或市场链接","urlReason":"链接选择原因"},"angles":[{"level":"L1_direct|L2_analogous|L3_thematic|L4_conceptual","claim":"候选承接角度，不是标题文案","targetUser":"目标用户","userValue":"用户价值","evidence":["证据说明或ID"],"productUrl":"推荐链接","riskNotes":["风险"]}],"evidenceRefs":["证据ID"],"missingData":["缺失数据"],"riskNotes":["风险"],"confidence":"high|medium|low"}}',
+      ].join('\n'),
       future_event_discovery: [
         '当前 agentType=future_event_discovery。',
         '你要从 goal.signals 中发现值得运营提前关注的未来事件候选。',
