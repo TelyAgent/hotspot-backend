@@ -282,7 +282,24 @@ export class OpportunityMiningOrchestratorService {
       const labels = await this.eventLabelingService.buildLabels({
         evidence: matchedEvidence,
       });
-      const event = await this.opportunityRepository.createEvent({
+      const identity = this.buildEventIdentity(decision, matchedEvidence);
+      const existingEvent = await this.opportunityRepository.findActiveEventByAnyEvidenceRef(
+        decision.evidenceRefs,
+      );
+      const event = existingEvent
+        ? await this.opportunityRepository.updateEventFromDuplicateEvidence({
+            id: existingEvent.id,
+            title: decision.title,
+            eventType: decision.opportunityType,
+            summary: decision.summary,
+            evidenceRefs: decision.evidenceRefs,
+            missingData: decision.missingData,
+            riskNotes: decision.riskNotes,
+            labels,
+            identity: identity as unknown as JsonObject,
+            confidence: decision.confidence,
+          })
+        : await this.opportunityRepository.createEvent({
         title: decision.title,
         eventType: decision.opportunityType,
         summary: decision.summary,
@@ -290,6 +307,7 @@ export class OpportunityMiningOrchestratorService {
         missingData: decision.missingData,
         riskNotes: decision.riskNotes,
         labels,
+        identity: identity as unknown as JsonObject,
         confidence: decision.confidence,
         status: 'suggested',
       });
@@ -303,7 +321,7 @@ export class OpportunityMiningOrchestratorService {
         ruleVersion: this.optionalString(decision.metadata?.ruleVersion),
         title: decision.title,
         summary: decision.summary,
-        identity: this.buildEventIdentity(decision, matchedEvidence),
+        identity,
         evidenceRefs: decision.evidenceRefs,
         signalRefs: this.uniqueStrings(
           matchedEvidence

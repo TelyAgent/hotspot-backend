@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { JsonObject } from '../common/types/json.type';
 import { PrismaService } from '../database/prisma.service';
 import {
   CreateEventInput,
@@ -7,6 +8,7 @@ import {
   CreateOpportunityMiningSignalRunInput,
   CreateOpportunityRulePackInput,
   Event,
+  EventLabel,
   EventListResult,
   Opportunity,
   OpportunityMiningSignalRun,
@@ -113,8 +115,78 @@ export class OpportunityRepository {
         missingData: input.missingData,
         riskNotes: input.riskNotes,
         labels: (input.labels ?? []) as unknown as Prisma.InputJsonValue,
+        identity: (input.identity ?? undefined) as unknown as Prisma.InputJsonValue,
+        contextVersion: input.contextVersion ?? 1,
         confidence: input.confidence,
         status: input.status ?? 'suggested',
+      },
+    }) as unknown as Promise<Event>;
+  }
+
+  async findActiveEventByAnyEvidenceRef(evidenceRefs: string[]): Promise<Event | null> {
+    const refs = Array.from(new Set(evidenceRefs.filter((ref) => ref.trim().length > 0)));
+    if (refs.length === 0) {
+      return null;
+    }
+
+    const rows = await this.prisma.$queryRaw<Event[]>`
+      SELECT *
+      FROM "events"
+      WHERE "canonicalEventId" IS NULL
+        AND "status" <> 'archived'
+        AND "evidenceRefs"::jsonb ?| ${refs}
+      ORDER BY "createdAt" ASC
+      LIMIT 1
+    `;
+
+    return (rows[0] ?? null) as unknown as Event | null;
+  }
+
+  async updateEventFromDuplicateEvidence(input: {
+    id: string;
+    title: string;
+    eventType: string;
+    summary: string;
+    evidenceRefs: string[];
+    missingData: string[];
+    riskNotes: string[];
+    labels?: EventLabel[];
+    identity?: JsonObject;
+    confidence: Event['confidence'];
+  }): Promise<Event> {
+    const existing = await this.findEventById(input.id);
+    const mergedEvidenceRefs = uniqueStrings([
+      ...normalizeStringArray(existing?.evidenceRefs),
+      ...input.evidenceRefs,
+    ]);
+    const mergedMissingData = uniqueStrings([
+      ...normalizeStringArray(existing?.missingData),
+      ...input.missingData,
+    ]);
+    const mergedRiskNotes = uniqueStrings([
+      ...normalizeStringArray(existing?.riskNotes),
+      ...input.riskNotes,
+    ]);
+    const mergedLabels = mergeEventLabels(
+      Array.isArray(existing?.labels) ? existing.labels : [],
+      input.labels ?? [],
+    );
+
+    return this.prisma.event.update({
+      where: { id: input.id },
+      data: {
+        title: input.title,
+        eventType: input.eventType,
+        summary: input.summary,
+        evidenceRefs: mergedEvidenceRefs,
+        missingData: mergedMissingData,
+        riskNotes: mergedRiskNotes,
+        labels: mergedLabels as unknown as Prisma.InputJsonValue,
+        identity: (input.identity ?? undefined) as unknown as Prisma.InputJsonValue,
+        confidence: input.confidence,
+        contextVersion: {
+          increment: 1,
+        },
       },
     }) as unknown as Promise<Event>;
   }
@@ -368,7 +440,11 @@ function buildEventListWhere(input: { status?: string; label?: string }) {
 
   if (status) {
     filters.push(Prisma.sql`"status" = ${status}`);
+  } else {
+    filters.push(Prisma.sql`"status" <> 'archived'`);
   }
+
+  filters.push(Prisma.sql`"canonicalEventId" IS NULL`);
 
   if (label) {
     filters.push(Prisma.sql`
@@ -429,4 +505,31 @@ function buildMcpEventWhere(input: {
   }
 
   return Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function mergeEventLabels(left: Event['labels'] | undefined | null, right: EventLabel[]): EventLabel[] {
+  const merged = new Map<string, EventLabel>();
+  for (const label of [...(left ?? []), ...right]) {
+    const key = `${label.category}:${label.code}`;
+    const existing = merged.get(key);
+    merged.set(key, {
+      ...label,
+      evidenceRefs: uniqueStrings([
+        ...(existing?.evidenceRefs ?? []),
+        ...label.evidenceRefs,
+      ]),
+      confidence: existing?.confidence === 'high' ? existing.confidence : label.confidence,
+    });
+  }
+  return [...merged.values()];
 }

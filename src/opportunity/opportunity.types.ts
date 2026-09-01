@@ -157,6 +157,8 @@ export interface CreateEventInput {
   missingData: string[];
   riskNotes: string[];
   labels?: EventLabel[];
+  identity?: JsonObject;
+  contextVersion?: number;
   confidence: OpportunityConfidence;
   status?: Event['status'];
 }
