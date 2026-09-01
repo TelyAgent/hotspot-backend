@@ -20,6 +20,15 @@ describe('TopicWatchDefaultsService', () => {
           }),
         ),
       },
+      topicWatchAccount: {
+        updateMany: jest.fn(() => Promise.resolve({ count: 0 })),
+        upsert: jest.fn((input) =>
+          Promise.resolve({
+            id: input.where.topicWatchId_handle.handle,
+            ...input.create,
+          }),
+        ),
+      },
     } as unknown as PrismaService;
     const service = new TopicWatchDefaultsService(prisma);
 

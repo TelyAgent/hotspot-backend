@@ -58,6 +58,10 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
     const now = nowDate.getTime();
     const collectionConfig =
       await this.projectConfigService.getXTrendCollectionConfig();
+    if (!collectionConfig.trendCollectionEnabled) {
+      return;
+    }
+
     const intervalMs = collectionConfig.collectionIntervalMs;
 
     if (this.lastStartedAt && now - this.lastStartedAt < intervalMs) {

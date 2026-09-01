@@ -1,18 +1,17 @@
 import { PrismaService } from '../../../src/database/prisma.service';
 import { CoreAgentToolsService } from '../../../src/agent/tools/core-agent-tools.service';
 import { ToolRegistryService } from '../../../src/agent/tool-registry/tool-registry.service';
+import { ProjectConfigService } from '../../../src/project-config/project-config.service';
 
 describe('CoreAgentToolsService', () => {
   it('registers default read tools for agent workflows', () => {
     const registry = new ToolRegistryService();
-    const service = new CoreAgentToolsService(
-      registry,
-      {} as unknown as PrismaService,
-    );
+    const service = createService(registry, {} as unknown as PrismaService);
 
     service.onModuleInit();
 
     expect(registry.list().map((tool) => tool.name)).toEqual([
+      'projectConfig.getXTrendConfig',
       'signal.search',
       'signal.getRecent',
       'signal.getById',
@@ -49,7 +48,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('signal.search').execute({
@@ -89,7 +88,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('evidence.getBySignalId').execute({
@@ -150,7 +149,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('xTrend.getLatestRanking').execute({
@@ -214,7 +213,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     await registry.get('xTrend.getLatestRanking').execute({
@@ -250,7 +249,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('xTrend.getRecentDiffs').execute({
@@ -308,7 +307,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('xTrend.getCrossRegionPresence').execute({
@@ -358,7 +357,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('topicWatch.listActive').execute({
@@ -416,7 +415,7 @@ describe('CoreAgentToolsService', () => {
         ),
       },
     } as unknown as PrismaService;
-    const service = new CoreAgentToolsService(registry, prisma);
+    const service = createService(registry, prisma);
 
     service.onModuleInit();
     const output = await registry.get('topicWatch.getAuthorPostPerformance').execute({
@@ -445,3 +444,21 @@ describe('CoreAgentToolsService', () => {
     );
   });
 });
+
+function createService(
+  registry: ToolRegistryService,
+  prisma: PrismaService,
+  projectConfigService = {
+    getXTrendCollectionConfig: jest.fn(() =>
+      Promise.resolve({
+        regions: ['global', 'United States'],
+        limit: 30,
+        collectionIntervalMs: 10800000,
+        trendCollectionEnabled: true,
+        topicWatchSchedulerEnabled: true,
+      }),
+    ),
+  } as unknown as ProjectConfigService,
+) {
+  return new CoreAgentToolsService(registry, prisma, projectConfigService);
+}

@@ -13,4 +13,6 @@ export interface XTrendCollectionConfig {
   regions: string[];
   limit: number;
   collectionIntervalMs: number;
+  trendCollectionEnabled: boolean;
+  topicWatchSchedulerEnabled: boolean;
 }

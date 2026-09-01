@@ -3,6 +3,7 @@ import { TopicWatchCollectionService } from '../../../src/topic-watch/collection
 import { TopicWatchSchedulerService } from '../../../src/topic-watch/scheduler/topic-watch-scheduler.service';
 import { TopicWatchRepository } from '../../../src/topic-watch/topic-watch.repository';
 import { CollectionRunRepository } from '../../../src/data-source/runner/collection-run.repository';
+import { ProjectConfigService } from '../../../src/project-config/project-config.service';
 
 describe('TopicWatchSchedulerService', () => {
   it('runs due topic watch collection using active plan refresh interval', async () => {
@@ -27,6 +28,11 @@ describe('TopicWatchSchedulerService', () => {
     } as unknown as CollectionRunRepository;
     const scheduler = new TopicWatchSchedulerService(
       { get: jest.fn(() => undefined) } as unknown as ConfigService,
+      {
+        getXTrendCollectionConfig: jest.fn(() =>
+          Promise.resolve({ topicWatchSchedulerEnabled: true }),
+        ),
+      } as unknown as ProjectConfigService,
       repository,
       collectionService,
       collectionRunRepository,
@@ -66,6 +72,11 @@ describe('TopicWatchSchedulerService', () => {
     const scheduler = new TopicWatchSchedulerService(
       { get: jest.fn(() => undefined) } as unknown as ConfigService,
       {
+        getXTrendCollectionConfig: jest.fn(() =>
+          Promise.resolve({ topicWatchSchedulerEnabled: true }),
+        ),
+      } as unknown as ProjectConfigService,
+      {
         getMinimumActiveRefreshIntervalMinutes: jest.fn(() => Promise.resolve(180)),
       } as unknown as TopicWatchRepository,
       collectionService,
@@ -88,6 +99,11 @@ describe('TopicWatchSchedulerService', () => {
     const scheduler = new TopicWatchSchedulerService(
       { get: jest.fn((key: string) => key === 'TOPIC_WATCH_SCHEDULER_ENABLED' ? 'false' : undefined) } as unknown as ConfigService,
       {
+        getXTrendCollectionConfig: jest.fn(() =>
+          Promise.resolve({ topicWatchSchedulerEnabled: true }),
+        ),
+      } as unknown as ProjectConfigService,
+      {
         getMinimumActiveRefreshIntervalMinutes: jest.fn(() => Promise.resolve(180)),
       } as unknown as TopicWatchRepository,
       collectionService,
@@ -98,6 +114,33 @@ describe('TopicWatchSchedulerService', () => {
 
     await scheduler.runDueCollection(new Date('2026-08-25T00:00:00.000Z'));
 
+    expect(collectionService.collect).not.toHaveBeenCalled();
+  });
+
+  it('does not run when project config scheduler switch is disabled', async () => {
+    const collectionService = {
+      collect: jest.fn(),
+    } as unknown as TopicWatchCollectionService;
+    const collectionRunRepository = {
+      findByJobIdPrefix: jest.fn(),
+    } as unknown as CollectionRunRepository;
+    const scheduler = new TopicWatchSchedulerService(
+      { get: jest.fn(() => undefined) } as unknown as ConfigService,
+      {
+        getXTrendCollectionConfig: jest.fn(() =>
+          Promise.resolve({ topicWatchSchedulerEnabled: false }),
+        ),
+      } as unknown as ProjectConfigService,
+      {
+        getMinimumActiveRefreshIntervalMinutes: jest.fn(() => Promise.resolve(180)),
+      } as unknown as TopicWatchRepository,
+      collectionService,
+      collectionRunRepository,
+    );
+
+    await scheduler.runDueCollection(new Date('2026-08-25T00:00:00.000Z'));
+
+    expect(collectionRunRepository.findByJobIdPrefix).not.toHaveBeenCalled();
     expect(collectionService.collect).not.toHaveBeenCalled();
   });
 });

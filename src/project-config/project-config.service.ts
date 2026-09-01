@@ -22,14 +22,30 @@ export class ProjectConfigService implements OnModuleInit {
       'x.trends.collectionIntervalMs',
       defaults.collectionIntervalMs,
     );
+    await this.seedDefault(
+      'x.trends.collectionEnabled',
+      defaults.trendCollectionEnabled,
+    );
+    await this.seedDefault(
+      'topicWatch.schedulerEnabled',
+      defaults.topicWatchSchedulerEnabled,
+    );
   }
 
   async getXTrendCollectionConfig(): Promise<XTrendCollectionConfig> {
     const defaults = DEFAULT_X_TREND_COLLECTION_CONFIG;
-    const [regionsConfig, limitConfig, intervalConfig] = await Promise.all([
+    const [
+      regionsConfig,
+      limitConfig,
+      intervalConfig,
+      trendCollectionEnabledConfig,
+      topicWatchSchedulerEnabledConfig,
+    ] = await Promise.all([
       this.repository.findByKey('x.trends.regions'),
       this.repository.findByKey('x.trends.limit'),
       this.repository.findByKey('x.trends.collectionIntervalMs'),
+      this.repository.findByKey('x.trends.collectionEnabled'),
+      this.repository.findByKey('topicWatch.schedulerEnabled'),
     ]);
 
     return {
@@ -38,6 +54,14 @@ export class ProjectConfigService implements OnModuleInit {
       collectionIntervalMs: normalizePositiveNumber(
         intervalConfig?.value,
         defaults.collectionIntervalMs,
+      ),
+      trendCollectionEnabled: normalizeBoolean(
+        trendCollectionEnabledConfig?.value,
+        defaults.trendCollectionEnabled,
+      ),
+      topicWatchSchedulerEnabled: normalizeBoolean(
+        topicWatchSchedulerEnabledConfig?.value,
+        defaults.topicWatchSchedulerEnabled,
       ),
     };
   }
@@ -79,6 +103,24 @@ export class ProjectConfigService implements OnModuleInit {
       });
     }
 
+    if (typeof patch.trendCollectionEnabled === 'boolean') {
+      await this.repository.upsert({
+        key: 'x.trends.collectionEnabled',
+        value: patch.trendCollectionEnabled,
+        description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.collectionEnabled'],
+        updatedBy,
+      });
+    }
+
+    if (typeof patch.topicWatchSchedulerEnabled === 'boolean') {
+      await this.repository.upsert({
+        key: 'topicWatch.schedulerEnabled',
+        value: patch.topicWatchSchedulerEnabled,
+        description: PROJECT_CONFIG_DESCRIPTIONS['topicWatch.schedulerEnabled'],
+        updatedBy,
+      });
+    }
+
     return this.getXTrendCollectionConfig();
   }
 
@@ -86,7 +128,7 @@ export class ProjectConfigService implements OnModuleInit {
     return this.repository.list();
   }
 
-  private async seedDefault(key: string, value: string[] | number) {
+  private async seedDefault(key: string, value: string[] | number | boolean) {
     const existing = await this.repository.findByKey(key);
 
     if (existing) {
@@ -123,6 +165,19 @@ function normalizePositiveNumber(value: unknown, fallback: number): number {
   if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+  }
+
+  return fallback;
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
   }
 
   return fallback;

@@ -12,7 +12,9 @@ describe('ProjectConfigService', () => {
     await expect(service.getXTrendCollectionConfig()).resolves.toEqual({
       regions: ['global', 'United States', 'United Kingdom', 'Japan', 'Korea'],
       limit: 30,
-      collectionIntervalMs: 7200000,
+      collectionIntervalMs: 10800000,
+      trendCollectionEnabled: true,
+      topicWatchSchedulerEnabled: true,
     });
   });
 
@@ -34,7 +36,32 @@ describe('ProjectConfigService', () => {
     await expect(service.getXTrendCollectionConfig()).resolves.toEqual({
       regions: ['Japan'],
       limit: 10,
-      collectionIntervalMs: 7200000,
+      collectionIntervalMs: 10800000,
+      trendCollectionEnabled: true,
+      topicWatchSchedulerEnabled: true,
     });
+  });
+
+  it('returns stored scheduler switches with X trend collection config', async () => {
+    const repository = {
+      findByKey: jest.fn((key: string) => {
+        if (key === 'x.trends.collectionEnabled') {
+          return { key, value: false };
+        }
+        if (key === 'topicWatch.schedulerEnabled') {
+          return { key, value: false };
+        }
+        return null;
+      }),
+      upsert: jest.fn(),
+    } as unknown as ProjectConfigRepository;
+    const service = new ProjectConfigService(repository);
+
+    await expect(service.getXTrendCollectionConfig()).resolves.toEqual(
+      expect.objectContaining({
+        trendCollectionEnabled: false,
+        topicWatchSchedulerEnabled: false,
+      }),
+    );
   });
 });

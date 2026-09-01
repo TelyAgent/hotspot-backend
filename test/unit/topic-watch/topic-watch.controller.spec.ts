@@ -1,6 +1,7 @@
 import { TopicCandidateDetailService } from '../../../src/topic-watch/candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from '../../../src/topic-watch/collection/topic-watch-collection.service';
 import { TopicWatchAgentService } from '../../../src/topic-watch/decision/topic-watch-agent.service';
+import { TopicWatchPostLeaderboardService } from '../../../src/topic-watch/leaderboard/topic-watch-post-leaderboard.service';
 import { TopicWatchPipelineStatusService } from '../../../src/topic-watch/status/topic-watch-pipeline-status.service';
 import { TopicWatchController } from '../../../src/topic-watch/topic-watch.controller';
 import { TopicWatchRepository } from '../../../src/topic-watch/topic-watch.repository';
@@ -151,6 +152,7 @@ describe('TopicWatchController', () => {
           rawItemCount: 3,
           signalCount: 3,
           evidenceCount: 3,
+          triggeredCount: 0,
           runs: [],
         }),
       ),
@@ -192,6 +194,7 @@ describe('TopicWatchController', () => {
           rawItemCount: 2,
           signalCount: 2,
           evidenceCount: 2,
+          triggeredCount: 0,
           runs: [],
         }),
       ),
@@ -211,6 +214,7 @@ function createTopicWatchController(input: {
   agentService?: TopicWatchAgentService;
   collectionService?: TopicWatchCollectionService;
   detailService?: TopicCandidateDetailService;
+  leaderboardService?: TopicWatchPostLeaderboardService;
   statusService?: TopicWatchPipelineStatusService;
 }) {
   return new TopicWatchController(
@@ -218,6 +222,7 @@ function createTopicWatchController(input: {
     input.agentService ?? ({} as TopicWatchAgentService),
     input.collectionService ?? ({} as TopicWatchCollectionService),
     input.detailService ?? ({} as TopicCandidateDetailService),
+    input.leaderboardService ?? ({} as TopicWatchPostLeaderboardService),
     input.statusService ?? ({} as TopicWatchPipelineStatusService),
   );
 }

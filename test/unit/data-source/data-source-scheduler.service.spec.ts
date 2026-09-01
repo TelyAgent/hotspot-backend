@@ -18,6 +18,7 @@ describe('DataSourceSchedulerService', () => {
         regions: ['Japan'],
         limit: 12,
         collectionIntervalMs: 1000,
+        trendCollectionEnabled: true,
       })),
     } as unknown as ProjectConfigService;
     const collectionRunRepository = {
@@ -58,6 +59,7 @@ describe('DataSourceSchedulerService', () => {
         regions: ['global'],
         limit: 30,
         collectionIntervalMs: 2 * 60 * 60 * 1000,
+        trendCollectionEnabled: true,
       })),
     } as unknown as ProjectConfigService;
     const collectionRunRepository = {
@@ -81,6 +83,38 @@ describe('DataSourceSchedulerService', () => {
 
     await service.runDueCollection(new Date('2026-08-25T11:05:00.000Z'));
 
+    expect(runner.run).not.toHaveBeenCalled();
+  });
+
+  it('skips X trends scheduled collection when project config switch is disabled', async () => {
+    const runner = {
+      run: jest.fn(),
+    } as unknown as CollectionRunnerService;
+    const projectConfig = {
+      getXTrendCollectionConfig: jest.fn(() => ({
+        regions: ['global'],
+        limit: 30,
+        collectionIntervalMs: 1000,
+        trendCollectionEnabled: false,
+      })),
+    } as unknown as ProjectConfigService;
+    const collectionRunRepository = {
+      findLatestByPlugin: jest.fn(),
+    } as unknown as CollectionRunRepository;
+    const service = new DataSourceSchedulerService(
+      {
+        get: jest.fn((key: string) =>
+          key === 'DATA_SOURCE_SCHEDULER_ENABLED' ? 'false' : undefined,
+        ),
+      } as unknown as ConfigService,
+      runner,
+      projectConfig,
+      collectionRunRepository,
+    );
+
+    await service.runDueCollection(new Date('2026-08-25T11:05:00.000Z'));
+
+    expect(collectionRunRepository.findLatestByPlugin).not.toHaveBeenCalled();
     expect(runner.run).not.toHaveBeenCalled();
   });
 });

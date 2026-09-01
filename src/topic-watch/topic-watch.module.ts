@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AgentModule } from '../agent/agent.module';
 import { DataSourceModule } from '../data-source/data-source.module';
 import { OpportunityModule } from '../opportunity/opportunity.module';
+import { ProjectConfigModule } from '../project-config/project-config.module';
 import { TopicAggregationService } from './aggregation/topic-aggregation.service';
 import { TopicCandidateDetailService } from './candidate-detail/topic-candidate-detail.service';
 import { TopicWatchCollectionService } from './collection/topic-watch-collection.service';
@@ -16,7 +17,7 @@ import { TopicWatchRepository } from './topic-watch.repository';
 import { TopicWatchTriggerService } from './trigger/topic-watch-trigger.service';
 
 @Module({
-  imports: [AgentModule, DataSourceModule, OpportunityModule],
+  imports: [AgentModule, DataSourceModule, OpportunityModule, ProjectConfigModule],
   controllers: [TopicWatchController],
   providers: [
     TopicWatchRepository,

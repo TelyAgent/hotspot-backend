@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ProjectConfigService } from '../../project-config/project-config.service';
 import { CollectionRunRepository } from '../../data-source/runner/collection-run.repository';
 import { TopicWatchCollectionService } from '../collection/topic-watch-collection.service';
 import { TopicWatchRepository } from '../topic-watch.repository';
@@ -16,6 +17,7 @@ export class TopicWatchSchedulerService implements OnModuleInit, OnModuleDestroy
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly projectConfigService: ProjectConfigService,
     private readonly topicWatchRepository: TopicWatchRepository,
     private readonly topicWatchCollectionService: TopicWatchCollectionService,
     private readonly collectionRunRepository: CollectionRunRepository,
@@ -48,7 +50,7 @@ export class TopicWatchSchedulerService implements OnModuleInit, OnModuleDestroy
   }
 
   async runDueCollection(nowDate: Date) {
-    if (this.isDisabled()) {
+    if (this.isDisabled() || (await this.isProjectConfigDisabled())) {
       return;
     }
 
@@ -95,5 +97,10 @@ export class TopicWatchSchedulerService implements OnModuleInit, OnModuleDestroy
 
   private isDisabled() {
     return this.configService.get<string>('TOPIC_WATCH_SCHEDULER_ENABLED') === 'false';
+  }
+
+  private async isProjectConfigDisabled() {
+    const config = await this.projectConfigService.getXTrendCollectionConfig();
+    return config.topicWatchSchedulerEnabled === false;
   }
 }

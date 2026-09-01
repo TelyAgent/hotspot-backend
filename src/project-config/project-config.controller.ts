@@ -28,6 +28,14 @@ export class ProjectConfigController {
           typeof body.collectionIntervalMs === 'number'
             ? body.collectionIntervalMs
             : undefined,
+        trendCollectionEnabled:
+          typeof body.trendCollectionEnabled === 'boolean'
+            ? body.trendCollectionEnabled
+            : undefined,
+        topicWatchSchedulerEnabled:
+          typeof body.topicWatchSchedulerEnabled === 'boolean'
+            ? body.topicWatchSchedulerEnabled
+            : undefined,
       },
       'api',
     );
