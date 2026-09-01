@@ -11,6 +11,7 @@ import { ContentModule } from './content/content.module';
 import { CopilotModule } from './copilot/copilot.module';
 import { EventMergeModule } from './event-merge/event-merge.module';
 import { FutureEventModule } from './future-event/future-event.module';
+import { McpModule } from './mcp/mcp.module';
 import { OpportunityModule } from './opportunity/opportunity.module';
 import { OperationsDecisionModule } from './operations-decision/operations-decision.module';
 import { PerformanceModule } from './performance/performance.module';
@@ -40,6 +41,7 @@ import { YoutubeModule } from './youtube/youtube.module';
     EventMergeModule,
     PerformanceModule,
     YoutubeModule,
+    McpModule,
   ],
   controllers: [AppController],
   providers: [AppService],

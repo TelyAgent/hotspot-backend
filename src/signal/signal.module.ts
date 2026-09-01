@@ -20,6 +20,12 @@ import { SignalEvidenceEnrichmentModule } from './enrichment/signal-evidence-enr
     EvidenceRepository,
     EvidenceService,
   ],
-  exports: [RawItemService, SignalService, EvidenceService, SignalEvidenceEnrichmentModule],
+  exports: [
+    RawItemService,
+    SignalService,
+    SignalRepository,
+    EvidenceService,
+    SignalEvidenceEnrichmentModule,
+  ],
 })
 export class SignalModule {}

@@ -157,6 +157,52 @@ export class OpportunityRepository {
     }) as unknown as Promise<Event | null>;
   }
 
+  async listEventsForMcp(input: {
+    query?: string;
+    domains?: string[];
+    sources?: string[];
+    labels?: string[];
+    since?: Date;
+    limit?: number;
+  } = {}): Promise<Event[]> {
+    const where = buildMcpEventWhere(input);
+    const limit = input.limit ?? 50;
+
+    return this.prisma.$queryRaw<Event[]>`
+      SELECT *
+      FROM "events"
+      ${where}
+      ORDER BY "updatedAt" DESC
+      LIMIT ${limit}
+    ` as unknown as Promise<Event[]>;
+  }
+
+  async findEventForMcp(id: string): Promise<Event | null> {
+    return this.findEventById(id);
+  }
+
+  async listEvidenceForMcp(evidenceRefs: string[]): Promise<unknown[]> {
+    if (!evidenceRefs.length) {
+      return [];
+    }
+
+    return this.prisma.evidenceItem.findMany({
+      where: {
+        id: {
+          in: evidenceRefs,
+        },
+      },
+      orderBy: [
+        {
+          publishedAt: 'asc',
+        },
+        {
+          observedAt: 'asc',
+        },
+      ],
+    }) as unknown as Promise<unknown[]>;
+  }
+
   async updateEventStatus(input: {
     id: string;
     status: Event['status'];
@@ -331,6 +377,49 @@ function buildEventListWhere(input: { status?: string; label?: string }) {
         FROM jsonb_array_elements(COALESCE("labels"::jsonb, '[]'::jsonb)) AS event_label
         WHERE event_label->>'name' = ${label}
            OR event_label->>'code' = ${label}
+      )
+    `);
+  }
+
+  if (!filters.length) {
+    return Prisma.empty;
+  }
+
+  return Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`;
+}
+
+function buildMcpEventWhere(input: {
+  query?: string;
+  domains?: string[];
+  sources?: string[];
+  labels?: string[];
+  since?: Date;
+}) {
+  const filters: Prisma.Sql[] = [];
+  const query = input.query?.trim();
+  const labels = [
+    ...(input.domains ?? []),
+    ...(input.sources ?? []),
+    ...(input.labels ?? []),
+  ]
+    .map((label) => label.trim())
+    .filter(Boolean);
+
+  if (query) {
+    filters.push(Prisma.sql`("title" ILIKE ${`%${query}%`} OR "summary" ILIKE ${`%${query}%`})`);
+  }
+
+  if (input.since) {
+    filters.push(Prisma.sql`"updatedAt" >= ${input.since}`);
+  }
+
+  if (labels.length) {
+    filters.push(Prisma.sql`
+      EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(COALESCE("labels"::jsonb, '[]'::jsonb)) AS event_label
+        WHERE event_label->>'name' IN (${Prisma.join(labels)})
+           OR event_label->>'code' IN (${Prisma.join(labels)})
       )
     `);
   }

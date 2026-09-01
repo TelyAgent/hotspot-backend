@@ -52,4 +52,64 @@ export class SignalRepository {
       },
     }) as Promise<Signal[]>;
   }
+
+  async findManyForMcp(input: {
+    take?: number;
+    signalType?: string;
+    platform?: string;
+    query?: string;
+    since?: Date;
+  } = {}): Promise<Signal[]> {
+    const and: Prisma.SignalWhereInput[] = [];
+    const query = input.query?.trim();
+    const platform = input.platform?.trim();
+
+    if (input.signalType) {
+      and.push({ signalType: input.signalType });
+    }
+
+    if (platform) {
+      and.push({
+        OR: [
+          { platform },
+          { source: platform },
+        ],
+      });
+    }
+
+    if (query) {
+      and.push({
+        OR: [
+          {
+            title: {
+              contains: query,
+              mode: 'insensitive',
+            },
+          },
+          {
+            summary: {
+              contains: query,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      });
+    }
+
+    if (input.since) {
+      and.push({
+        observedAt: {
+          gte: input.since,
+        },
+      });
+    }
+
+    return this.prisma.signal.findMany({
+      where: and.length ? { AND: and } : undefined,
+      take: input.take ?? 50,
+      orderBy: {
+        observedAt: 'desc',
+      },
+    }) as Promise<Signal[]>;
+  }
 }
