@@ -50,9 +50,96 @@ HOTSPOT_MCP_API_KEY=replace-with-real-mcp-api-key
 - 不要把真实密钥写进公开文档、前端代码或日志。
 - 如果怀疑密钥泄露，应该立刻更换环境变量并重启服务。
 
-## 4. 请求协议
+## 4. 外部 Agent 平台配置
 
-当前接口使用 JSON-RPC 风格请求。
+如果对方的 Agent 平台支持远程 HTTP MCP Server，优先把下面这段配置给对方。
+
+本地开发环境：
+
+```json
+{
+  "mcpServers": {
+    "hotspot": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp",
+      "headers": {
+        "Authorization": "Bearer <HOTSPOT_MCP_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+线上环境示例：
+
+```json
+{
+  "mcpServers": {
+    "hotspot": {
+      "type": "http",
+      "url": "http://34.94.189.76:6061/mcp",
+      "headers": {
+        "Authorization": "Bearer <HOTSPOT_MCP_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+不同 Agent 平台的配置字段可能略有差异。如果它的界面不是粘贴整段 JSON，而是分字段填写，可以按下面填写：
+
+| 字段 | 值 |
+| --- | --- |
+| Server name | `hotspot` |
+| Transport / Type | `http` |
+| URL | `http://34.94.189.76:6061/mcp` |
+| Header name | `Authorization` |
+| Header value | `Bearer <HOTSPOT_MCP_API_KEY>` |
+
+## 5. 请求协议
+
+接口使用 MCP over HTTP 的 JSON-RPC 请求。
+
+初始化握手：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "external-agent",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+返回示例：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "serverInfo": {
+      "name": "hotspot-agent-backend",
+      "title": "Hotspot Agent MCP Server",
+      "version": "0.1.0"
+    },
+    "instructions": "这是热点情报系统的只读 MCP 服务。"
+  }
+}
+```
 
 列出工具：
 
@@ -61,6 +148,18 @@ HOTSPOT_MCP_API_KEY=replace-with-real-mcp-api-key
   "jsonrpc": "2.0",
   "id": 1,
   "method": "tools/list"
+}
+```
+
+返回结构：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "tools": []
+  }
 }
 ```
 
@@ -80,9 +179,35 @@ HOTSPOT_MCP_API_KEY=replace-with-real-mcp-api-key
 }
 ```
 
-## 5. 可用工具
+工具调用返回结构：
 
-### 5.1 get_system_taxonomy
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "供普通模型阅读的 JSON 文本"
+      }
+    ],
+    "structuredContent": {
+      "data": {}
+    },
+    "isError": false
+  }
+}
+```
+
+外部 Agent 调用时：
+
+- 如果需要自然语言理解，读取 `result.content[0].text`。
+- 如果需要稳定结构化数据，读取 `result.structuredContent.data`。
+
+## 6. 可用工具
+
+### 6.1 get_system_taxonomy
 
 获取系统的数据语义、固定事件领域、固定来源标签和热度标签。
 
@@ -104,7 +229,7 @@ curl -X POST http://localhost:3001/mcp \
 - 事件领域有哪些固定值？
 - 来源和热度标签有哪些固定值？
 
-### 5.2 search_hot_events
+### 6.2 search_hot_events
 
 查询热点事件列表。
 
@@ -155,7 +280,7 @@ curl -X POST http://localhost:3001/mcp \
 | `observedAt` | 事件首次进入系统的时间 |
 | `updatedAt` | 事件最近更新时间 |
 
-### 5.3 get_hot_event_detail
+### 6.3 get_hot_event_detail
 
 查询单个热点事件详情。
 
@@ -184,7 +309,7 @@ curl -X POST http://localhost:3001/mcp \
 
 外部 Agent 如果要生成内容、判断承接角度、写分析报告，优先使用 `promptContext`。
 
-### 5.4 search_signals
+### 6.4 search_signals
 
 查询原始 Signal。
 
@@ -223,7 +348,7 @@ curl -X POST http://localhost:3001/mcp \
 | `metrics` | 浏览、点赞、评论等公开指标 |
 | `linkedEventIds` | 已关联的事件 ID |
 
-## 6. 固定事件领域
+## 7. 固定事件领域
 
 当前固定事件领域如下：
 
@@ -238,7 +363,7 @@ curl -X POST http://localhost:3001/mcp \
 
 外部 Agent 做筛选时，应优先使用这些固定值。
 
-## 7. 固定来源与热度标签
+## 8. 固定来源与热度标签
 
 当前固定标签如下：
 
@@ -257,7 +382,7 @@ curl -X POST http://localhost:3001/mcp \
 - 真正的触发原因应读取 `triggerReason` 字段。
 - 例如 `第一方确认` 表示证据里包含第一方权威账号，不代表事件一定是因为第一方账号触发。
 
-## 8. 外部 Agent 推荐调用流程
+## 9. 外部 Agent 推荐调用流程
 
 ### 场景一：回答“现在有什么热点？”
 
@@ -278,7 +403,7 @@ curl -X POST http://localhost:3001/mcp \
 2. 用 `platform`、`signalType`、`query` 缩小范围
 3. 如果 Signal 已有关联事件，继续调用 `get_hot_event_detail`
 
-## 9. 错误返回
+## 10. 错误返回
 
 未带鉴权或密钥错误时，HTTP 状态码为 `401`。
 
@@ -289,10 +414,13 @@ curl -X POST http://localhost:3001/mcp \
   "jsonrpc": "2.0",
   "id": 2,
   "error": {
-    "code": "MCP_TOOL_NOT_FOUND",
+    "code": -32602,
     "message": "未找到指定 MCP 工具。",
-    "retryable": false,
-    "suggestion": "请先调用 tools/list 获取可用工具名称。"
+    "data": {
+      "code": "MCP_TOOL_NOT_FOUND",
+      "retryable": false,
+      "suggestion": "请先调用 tools/list 获取可用工具名称。"
+    }
   }
 }
 ```
@@ -301,10 +429,11 @@ curl -X POST http://localhost:3001/mcp \
 
 - `error.code`
 - `error.message`
-- `error.retryable`
-- `error.suggestion`
+- `error.data.code`
+- `error.data.retryable`
+- `error.data.suggestion`
 
-## 10. 使用边界
+## 11. 使用边界
 
 当前 MCP 服务适合：
 

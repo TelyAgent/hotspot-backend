@@ -8,6 +8,13 @@ export interface McpJsonRpcRequest {
   id?: string | number | null;
   method?: string;
   params?: {
+    protocolVersion?: string;
+    capabilities?: Record<string, unknown>;
+    clientInfo?: {
+      name?: string;
+      title?: string;
+      version?: string;
+    };
     name?: string;
     arguments?: Record<string, unknown>;
   };
@@ -25,11 +32,14 @@ export interface McpTool {
 }
 
 export interface McpErrorResponseBody {
-  code: string;
+  code: number;
   message: string;
-  retryable: boolean;
-  suggestion?: string;
-  details?: Record<string, unknown>;
+  data?: {
+    code: string;
+    retryable: boolean;
+    suggestion?: string;
+    details?: Record<string, unknown>;
+  };
 }
 
 export interface McpSearchHotEventsInput {

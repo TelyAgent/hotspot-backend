@@ -58,6 +58,77 @@ describe('MCP API', () => {
     );
   });
 
+  it('performs the MCP initialize handshake', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/mcp')
+      .set('Authorization', 'Bearer test-mcp-key')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: {
+            name: 'test-agent',
+            version: '1.0.0',
+          },
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      result: expect.objectContaining({
+        protocolVersion: '2025-06-18',
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
+        serverInfo: {
+          name: 'hotspot-agent-backend',
+          title: 'Hotspot Agent MCP Server',
+          version: expect.any(String),
+        },
+        instructions: expect.any(String),
+      }),
+    });
+  });
+
+  it('returns standard MCP tool call content and structured content', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/mcp')
+      .set('Authorization', 'Bearer test-mcp-key')
+      .send({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'get_system_taxonomy', arguments: {} },
+      })
+      .expect(200);
+
+    expect(response.body).toEqual({
+      jsonrpc: '2.0',
+      id: 2,
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: expect.stringContaining('"domains"'),
+          },
+        ],
+        structuredContent: {
+          data: expect.objectContaining({
+            eventDomains: expect.any(Array),
+          }),
+        },
+        isError: false,
+      },
+    });
+  });
+
   it('returns agent-readable error for unknown tools', async () => {
     const response = await request(app.getHttpServer())
       .post('/mcp')
@@ -74,10 +145,13 @@ describe('MCP API', () => {
       jsonrpc: '2.0',
       id: 2,
       error: {
-        code: 'MCP_TOOL_NOT_FOUND',
+        code: -32602,
         message: '未找到指定 MCP 工具。',
-        retryable: false,
-        suggestion: '请先调用 tools/list 获取可用工具名称。',
+        data: {
+          code: 'MCP_TOOL_NOT_FOUND',
+          retryable: false,
+          suggestion: '请先调用 tools/list 获取可用工具名称。',
+        },
       },
     });
   });
