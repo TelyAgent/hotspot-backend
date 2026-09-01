@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import {
   OperationRecommendationDecision,
+  OperationRecommendationEvidenceItem,
   PredxNewsItemInput,
 } from './operations-decision.types';
 
@@ -52,8 +53,8 @@ export class OperationsDecisionRepository {
     });
   }
 
-  findRecommendationById(id: string) {
-    return this.prisma.operationRecommendation.findUnique({
+  async findRecommendationById(id: string) {
+    const recommendation = await this.prisma.operationRecommendation.findUnique({
       where: { id },
       include: {
         predxNewsItem: true,
@@ -61,15 +62,19 @@ export class OperationsDecisionRepository {
         records: { orderBy: { createdAt: 'desc' } },
       },
     });
+    if (!recommendation) {
+      return null;
+    }
+    return this.attachEvidenceItems([recommendation]).then((items) => items[0]);
   }
 
-  listRecommendations(input: {
+  async listRecommendations(input: {
     status?: string;
     basis?: string;
     priority?: string;
     take?: number;
   } = {}) {
-    return this.prisma.operationRecommendation.findMany({
+    const recommendations = await this.prisma.operationRecommendation.findMany({
       where: {
         ...(input.status ? { status: input.status } : {}),
         ...(input.basis ? { basis: input.basis } : {}),
@@ -83,6 +88,7 @@ export class OperationsDecisionRepository {
         records: { orderBy: { createdAt: 'desc' } },
       },
     });
+    return this.attachEvidenceItems(recommendations);
   }
 
   async createRecommendation(input: {
@@ -174,7 +180,7 @@ export class OperationsDecisionRepository {
           },
         });
 
-    return recommendation;
+    return this.attachEvidenceItems([recommendation]).then((items) => items[0]);
   }
 
   listInbox() {
@@ -204,8 +210,8 @@ export class OperationsDecisionRepository {
     });
   }
 
-  listRecords() {
-    return this.prisma.operationDecisionRecord.findMany({
+  async listRecords() {
+    const records = await this.prisma.operationDecisionRecord.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
@@ -217,6 +223,11 @@ export class OperationsDecisionRepository {
         },
       },
     });
+    const recommendations = await this.attachEvidenceItems(records.map((record) => record.recommendation));
+    return records.map((record, index) => ({
+      ...record,
+      recommendation: recommendations[index],
+    }));
   }
 
   async recordRecommendationDecision(input: {
@@ -228,7 +239,7 @@ export class OperationsDecisionRepository {
     operator?: string | null;
     metadata?: Prisma.InputJsonValue;
   }) {
-    return this.prisma.$transaction(async (tx) => {
+    const recordWithRecommendation = await this.prisma.$transaction(async (tx) => {
       const record = await tx.operationDecisionRecord.create({
         data: {
           recommendationId: input.recommendationId,
@@ -257,5 +268,89 @@ export class OperationsDecisionRepository {
         },
       });
     });
+    const [recommendation] = await this.attachEvidenceItems([recordWithRecommendation.recommendation]);
+    return {
+      ...recordWithRecommendation,
+      recommendation,
+    };
   }
+
+  private async attachEvidenceItems<T extends { evidenceRefs: unknown }>(
+    recommendations: T[],
+  ): Promise<Array<T & { evidenceItems: OperationRecommendationEvidenceItem[] }>> {
+    const ids = [...new Set(recommendations.flatMap((item) => readStringArray(item.evidenceRefs)))];
+    if (ids.length === 0) {
+      return recommendations.map((item) => ({ ...item, evidenceItems: [] }));
+    }
+
+    const evidenceItems = await this.prisma.evidenceItem.findMany({
+      where: { id: { in: ids } },
+    });
+    const evidenceById = new Map(
+      evidenceItems.map((item) => [item.id, toOperationEvidenceItem(item)]),
+    );
+
+    return recommendations.map((item) => ({
+      ...item,
+      evidenceItems: readStringArray(item.evidenceRefs)
+        .map((id) => evidenceById.get(id))
+        .filter((evidence): evidence is OperationRecommendationEvidenceItem => Boolean(evidence)),
+    }));
+  }
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+}
+
+function toOperationEvidenceItem(item: {
+  id: string;
+  sourceType: string;
+  sourceTool: string | null;
+  sourceItemId: string | null;
+  claim: string;
+  text: string | null;
+  url: string | null;
+  author: string | null;
+  publishedAt: Date | null;
+  observedAt: Date;
+  metrics: Prisma.JsonValue | null;
+  confidence: string;
+  metadata: Prisma.JsonValue | null;
+}): OperationRecommendationEvidenceItem {
+  const metadata = toRecord(item.metadata);
+  return {
+    id: item.id,
+    sourceType: item.sourceType,
+    sourceName: item.sourceTool ?? item.sourceType,
+    authorName:
+      item.author ??
+      readString(metadata.authorHandle) ??
+      readString(metadata.authorName) ??
+      readString(metadata.channelTitle),
+    title:
+      readString(metadata.title) ??
+      item.sourceItemId ??
+      readString(metadata.postId) ??
+      readString(metadata.videoId),
+    summary: item.claim,
+    text: item.text,
+    url: item.url ?? readString(metadata.url),
+    publishedAt: item.publishedAt?.toISOString() ?? null,
+    observedAt: item.observedAt.toISOString(),
+    metrics: item.metrics,
+    confidence: item.confidence,
+  };
+}
+
+function toRecord(value: Prisma.JsonValue | null): Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }

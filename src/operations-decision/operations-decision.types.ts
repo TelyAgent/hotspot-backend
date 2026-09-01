@@ -54,3 +54,18 @@ export interface OperationRecommendationDecision {
   riskNotes: string[];
   confidence: 'high' | 'medium' | 'low';
 }
+
+export interface OperationRecommendationEvidenceItem {
+  id: string;
+  sourceType: string;
+  sourceName?: string | null;
+  authorName?: string | null;
+  title?: string | null;
+  summary: string;
+  text?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  observedAt: string;
+  metrics?: unknown;
+  confidence: string;
+}
