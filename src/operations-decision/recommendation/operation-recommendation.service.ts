@@ -45,30 +45,50 @@ export class OperationRecommendationService {
 
     for (const event of events) {
       const relatedNews = this.pickRelatedNews(event, newsItems);
-      if (!relatedNews.length) continue;
+      const publicHeat = this.detectPublicHeatPath(event);
+      const canAskAgent = Boolean(this.configService.get<string>('OPENAI_API_KEY'));
 
-      const fallback = this.createFallbackDecision(event, relatedNews[0]);
-      let decision = fallback;
+      let decision = relatedNews.length
+        ? this.createFallbackDecision(event, relatedNews[0])
+        : publicHeat
+          ? this.createPublicHeatDecision(event)
+          : undefined;
       let agentRunId: string | undefined;
 
-      if (this.configService.get<string>('OPENAI_API_KEY')) {
+      if (canAskAgent) {
         const agentResult = await this.agent.decide({
-          event: serializeEvent(event),
+          event: {
+            ...serializeEvent(event),
+            operationDecisionHints: {
+              publicHeat,
+              publicHeatReason: publicHeat
+                ? '事件代表内容进入 X 短时增速排行榜前 3，满足公共热度推荐路径。'
+                : null,
+              relatedPredxNewsCount: relatedNews.length,
+            },
+          },
           predxNews: relatedNews.slice(0, 4).map(serializeNews),
           productReference,
         });
-        if (agentResult.skipped) {
+        if (agentResult.skipped && !decision) {
           continue;
         }
         if (agentResult.decision?.angles.length) {
           decision = agentResult.decision;
+          if (publicHeat) {
+            decision = withPublicHeatLabel(decision);
+          }
         }
         agentRunId = agentResult.agentRunId;
       }
 
+      if (!decision) {
+        continue;
+      }
+
       created.push(await this.repository.createRecommendation({
         sourceEventId: event.id,
-        predxNewsItemId: relatedNews[0].id,
+        predxNewsItemId: relatedNews[0]?.id ?? null,
         decision,
         agentRunId,
       }));
@@ -293,6 +313,56 @@ export class OperationRecommendationService {
     };
   }
 
+  private createPublicHeatDecision(event: Event): OperationRecommendationDecision {
+    const evidenceRefs = getStringArray(event.evidenceRefs);
+
+    return {
+      title: `${event.title} × 公共热度选题`,
+      summary: `该热点的代表内容进入 X 短时增速排行榜前 3，适合作为公共热度选题进入人工判断。`,
+      recommendationLabels: ['公共热度'],
+      basis: 'heat',
+      priority: 'immediate',
+      reason: '事件代表内容进入 X 短时增速排行榜前 3，满足公共热度推荐路径。',
+      predxOpportunity: {
+        status: 'none',
+        associationLevel: 'none',
+        rationale: '当前仅确认公共热度路径成立，尚未确认与 PredX 市场或产品价值存在自然连接。',
+        selectedProductValue: '',
+        recommendedProductPage: 'home',
+        recommendedProductUrl: 'https://predx.pro/home',
+        urlReason: '公共热度路径不强制要求存在具体产品承接链接。',
+      },
+      angles: [
+        {
+          level: 'public_heat',
+          claim: '先解释该事件为什么在短时间内引发公共讨论，再由运营判断是否需要进一步寻找 PredX 承接角度。',
+          targetUser: '关注热点变化和事件传播的用户',
+          userValue: '帮助用户快速理解热点升温原因和后续观察价值。',
+          evidence: evidenceRefs,
+          productUrl: undefined,
+          riskNotes: ['当前仅基于公共热度进入推荐，不应强行写成 PredX 市场已经承接。'],
+        },
+      ],
+      evidenceRefs,
+      missingData: ['尚未确认是否存在直接或类似 PredX 市场。'],
+      riskNotes: ['公共热度不等于事件事实已经被多方确认。'],
+      confidence: normalizeConfidence(event.confidence, 'medium'),
+    };
+  }
+
+  private detectPublicHeatPath(event: Event): boolean {
+    const sourceSummary = toJsonObject(event.sourceSummary);
+    const rank =
+      getNumber(sourceSummary.publicHeatRank) ??
+      getNumber(sourceSummary.shortTermGrowthRank) ??
+      getNumber(sourceSummary.representativePostGrowthRank);
+    if (rank !== undefined) {
+      return rank <= 3;
+    }
+
+    return getLabelNames(event.labels).includes('公共热度');
+  }
+
   private async loadProductReference(): Promise<string> {
     const path =
       this.configService.get<string>('PREDX_PRODUCT_REFERENCE_PATH') ??
@@ -311,6 +381,20 @@ function serializeEvent(event: Event): JsonObject {
     labels: (event.labels ?? null) as JsonValue,
     evidenceRefs: event.evidenceRefs as JsonValue,
     createdAt: event.createdAt.toISOString(),
+  };
+}
+
+function withPublicHeatLabel(
+  decision: OperationRecommendationDecision,
+): OperationRecommendationDecision {
+  if (decision.recommendationLabels.includes('公共热度')) {
+    return decision;
+  }
+
+  return {
+    ...decision,
+    recommendationLabels: ['公共热度', ...decision.recommendationLabels],
+    priority: 'immediate',
   };
 }
 
@@ -357,4 +441,47 @@ function mapCategoryLabel(category: string): string {
   if (/crypto|web3/i.test(category)) return 'Crypto & Web3';
   if (/election|politic/i.test(category)) return 'Politics & Elections';
   return 'Prediction Markets';
+}
+
+function getLabelNames(labels: unknown): string[] {
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+
+  return labels
+    .map((label) => {
+      if (typeof label === 'string') return label;
+      if (label && typeof label === 'object' && 'name' in label) {
+        return String((label as { name?: unknown }).name ?? '');
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
+function getStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+function toJsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function normalizeConfidence(
+  value: unknown,
+  fallback: OperationRecommendationDecision['confidence'],
+): OperationRecommendationDecision['confidence'] {
+  return value === 'high' || value === 'medium' || value === 'low'
+    ? value
+    : fallback;
 }
