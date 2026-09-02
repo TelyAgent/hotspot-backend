@@ -194,6 +194,7 @@ export class OpportunityRepository {
   async listEvents(input: {
     status?: string;
     label?: string;
+    labels?: string[];
     page?: number;
     pageSize?: number;
   } = {}): Promise<EventListResult> {
@@ -433,10 +434,10 @@ export class OpportunityRepository {
   }
 }
 
-function buildEventListWhere(input: { status?: string; label?: string }) {
+function buildEventListWhere(input: { status?: string; label?: string; labels?: string[] }) {
   const filters: Prisma.Sql[] = [];
   const status = input.status?.trim();
-  const label = input.label?.trim();
+  const labels = uniqueStrings([input.label ?? '', ...(input.labels ?? [])]);
 
   if (status) {
     filters.push(Prisma.sql`"status" = ${status}`);
@@ -446,15 +447,8 @@ function buildEventListWhere(input: { status?: string; label?: string }) {
 
   filters.push(Prisma.sql`"canonicalEventId" IS NULL`);
 
-  if (label) {
-    filters.push(Prisma.sql`
-      EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements(COALESCE("labels"::jsonb, '[]'::jsonb)) AS event_label
-        WHERE event_label->>'name' = ${label}
-           OR event_label->>'code' = ${label}
-      )
-    `);
+  for (const label of labels) {
+    filters.push(buildEventLabelExistsSql(label));
   }
 
   if (!filters.length) {
@@ -462,6 +456,17 @@ function buildEventListWhere(input: { status?: string; label?: string }) {
   }
 
   return Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`;
+}
+
+function buildEventLabelExistsSql(label: string) {
+  return Prisma.sql`
+    EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(COALESCE("labels"::jsonb, '[]'::jsonb)) AS event_label
+      WHERE event_label->>'name' = ${label}
+         OR event_label->>'code' = ${label}
+    )
+  `;
 }
 
 function buildMcpEventWhere(input: {

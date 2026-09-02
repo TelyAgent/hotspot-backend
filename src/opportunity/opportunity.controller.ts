@@ -33,12 +33,14 @@ export class OpportunityController {
   async listEvents(
     @Query('status') status?: string,
     @Query('label') label?: string,
+    @Query('labels') labels?: string | string[],
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
     const result = await this.opportunityRepository.listEvents({
       status,
       label,
+      labels: this.parseLabels(labels),
       page: parsePage(page),
       pageSize: parsePageSize(pageSize),
     });
@@ -183,6 +185,14 @@ export class OpportunityController {
     return Array.isArray(value)
       ? value.filter((item): item is string => typeof item === 'string')
       : [];
+  }
+
+  private parseLabels(value: string | string[] | undefined): string[] {
+    const values = Array.isArray(value) ? value : value ? [value] : [];
+    return values
+      .flatMap((item) => item.split(','))
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   private parseJsonObject(value: unknown): JsonObject | undefined {
