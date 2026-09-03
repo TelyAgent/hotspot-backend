@@ -40,45 +40,6 @@ export class OperationsDecisionController {
     return this.recommendationService.findRecommendationById(id);
   }
 
-  @Post('recommendations/:id/adopt')
-  adoptRecommendation(
-    @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
-  ) {
-    return this.recommendationService.adoptRecommendation({
-      recommendationId: id,
-      angleId: String(body.angleId ?? ''),
-      operator: typeof body.operator === 'string' ? body.operator : undefined,
-      note: typeof body.note === 'string' ? body.note : undefined,
-    });
-  }
-
-  @Post('recommendations/:id/adopt-edited')
-  adoptEditedRecommendation(
-    @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
-  ) {
-    return this.recommendationService.adoptEditedRecommendation({
-      recommendationId: id,
-      angleId: typeof body.angleId === 'string' ? body.angleId : undefined,
-      finalAngle: String(body.finalAngle ?? ''),
-      operator: typeof body.operator === 'string' ? body.operator : undefined,
-      note: typeof body.note === 'string' ? body.note : undefined,
-    });
-  }
-
-  @Post('recommendations/:id/reject')
-  rejectRecommendation(
-    @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
-  ) {
-    return this.recommendationService.rejectRecommendation({
-      recommendationId: id,
-      operator: typeof body.operator === 'string' ? body.operator : undefined,
-      note: typeof body.note === 'string' ? body.note : undefined,
-    });
-  }
-
   @Post('recommendations/run')
   runRecommendations(@Body() body: Record<string, unknown>) {
     return this.recommendationService.generate({
@@ -99,11 +60,6 @@ export class OperationsDecisionController {
       source: typeof body.source === 'string' ? body.source : undefined,
       sourceUrl: typeof body.sourceUrl === 'string' ? body.sourceUrl : undefined,
     });
-  }
-
-  @Get('records')
-  listRecords() {
-    return this.recommendationService.listRecords();
   }
 }
 

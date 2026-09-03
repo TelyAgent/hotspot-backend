@@ -59,7 +59,6 @@ export class OperationsDecisionRepository {
       include: {
         predxNewsItem: true,
         angles: { orderBy: { sortOrder: 'asc' } },
-        records: { orderBy: { createdAt: 'desc' } },
       },
     });
     if (!recommendation) {
@@ -85,7 +84,6 @@ export class OperationsDecisionRepository {
       include: {
         predxNewsItem: true,
         angles: { orderBy: { sortOrder: 'asc' } },
-        records: { orderBy: { createdAt: 'desc' } },
       },
     });
     return this.attachEvidenceItems(recommendations);
@@ -154,7 +152,6 @@ export class OperationsDecisionRepository {
           include: {
             predxNewsItem: true,
             angles: { orderBy: { sortOrder: 'asc' } },
-            records: { orderBy: { createdAt: 'desc' } },
           },
         })
       : await this.prisma.operationRecommendation.create({
@@ -176,7 +173,6 @@ export class OperationsDecisionRepository {
           include: {
             predxNewsItem: true,
             angles: { orderBy: { sortOrder: 'asc' } },
-            records: { orderBy: { createdAt: 'desc' } },
           },
         });
 
@@ -208,71 +204,6 @@ export class OperationsDecisionRepository {
         conclusion: '待判断',
       },
     });
-  }
-
-  async listRecords() {
-    const records = await this.prisma.operationDecisionRecord.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: {
-        recommendation: {
-          include: {
-            predxNewsItem: true,
-            angles: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
-      },
-    });
-    const recommendations = await this.attachEvidenceItems(records.map((record) => record.recommendation));
-    return records.map((record, index) => ({
-      ...record,
-      recommendation: recommendations[index],
-    }));
-  }
-
-  async recordRecommendationDecision(input: {
-    recommendationId: string;
-    result: string;
-    recommendationStatus: string;
-    finalAngle?: string | null;
-    note?: string | null;
-    operator?: string | null;
-    metadata?: Prisma.InputJsonValue;
-  }) {
-    const recordWithRecommendation = await this.prisma.$transaction(async (tx) => {
-      const record = await tx.operationDecisionRecord.create({
-        data: {
-          recommendationId: input.recommendationId,
-          result: input.result,
-          finalAngle: input.finalAngle ?? null,
-          note: input.note ?? null,
-          operator: input.operator ?? null,
-          metadata: input.metadata ?? Prisma.JsonNull,
-        },
-      });
-
-      await tx.operationRecommendation.update({
-        where: { id: input.recommendationId },
-        data: { status: input.recommendationStatus },
-      });
-
-      return tx.operationDecisionRecord.findUniqueOrThrow({
-        where: { id: record.id },
-        include: {
-          recommendation: {
-            include: {
-              predxNewsItem: true,
-              angles: { orderBy: { sortOrder: 'asc' } },
-            },
-          },
-        },
-      });
-    });
-    const [recommendation] = await this.attachEvidenceItems([recordWithRecommendation.recommendation]);
-    return {
-      ...recordWithRecommendation,
-      recommendation,
-    };
   }
 
   private async attachEvidenceItems<T extends { evidenceRefs: unknown }>(

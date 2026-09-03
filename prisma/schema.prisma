@@ -742,7 +742,6 @@ model OperationRecommendation {
 
   predxNewsItem PredxNewsItem? @relation(fields: [predxNewsItemId], references: [id], onDelete: SetNull)
   angles        OperationRecommendationAngle[]
-  records       OperationDecisionRecord[]
 
   @@index([status, createdAt])
   @@index([sourceEventId])
@@ -767,25 +766,6 @@ model OperationRecommendationAngle {
 
   @@index([recommendationId, sortOrder])
   @@map("operation_recommendation_angles")
-}
-
-model OperationDecisionRecord {
-  id                String   @id @default(cuid())
-  recommendationId  String
-  result            String
-  finalAngle        String?
-  note              String?
-  operator          String?
-  regenCount        Int      @default(0)
-  metadata          Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  recommendation OperationRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
-
-  @@index([recommendationId, createdAt])
-  @@index([result, createdAt])
-  @@map("operation_decision_records")
 }
 
 model EventSourceContext {

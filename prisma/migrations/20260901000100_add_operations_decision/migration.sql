@@ -84,21 +84,6 @@ CREATE TABLE "operation_recommendation_angles" (
   CONSTRAINT "operation_recommendation_angles_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "operation_decision_records" (
-  "id" TEXT NOT NULL,
-  "recommendationId" TEXT NOT NULL,
-  "result" TEXT NOT NULL,
-  "finalAngle" TEXT,
-  "note" TEXT,
-  "operator" TEXT,
-  "regenCount" INTEGER NOT NULL DEFAULT 0,
-  "metadata" JSONB,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP(3) NOT NULL,
-
-  CONSTRAINT "operation_decision_records_pkey" PRIMARY KEY ("id")
-);
-
 CREATE UNIQUE INDEX "predx_news_items_externalId_key" ON "predx_news_items"("externalId");
 CREATE INDEX "predx_news_items_publishedAt_idx" ON "predx_news_items"("publishedAt");
 CREATE INDEX "predx_news_items_category_idx" ON "predx_news_items"("category");
@@ -107,8 +92,6 @@ CREATE INDEX "operation_recommendations_status_createdAt_idx" ON "operation_reco
 CREATE INDEX "operation_recommendations_sourceEventId_idx" ON "operation_recommendations"("sourceEventId");
 CREATE INDEX "operation_recommendations_predxNewsItemId_idx" ON "operation_recommendations"("predxNewsItemId");
 CREATE INDEX "operation_recommendation_angles_recommendationId_sortOrder_idx" ON "operation_recommendation_angles"("recommendationId", "sortOrder");
-CREATE INDEX "operation_decision_records_recommendationId_createdAt_idx" ON "operation_decision_records"("recommendationId", "createdAt");
-CREATE INDEX "operation_decision_records_result_createdAt_idx" ON "operation_decision_records"("result", "createdAt");
 
 ALTER TABLE "operation_recommendations"
   ADD CONSTRAINT "operation_recommendations_predxNewsItemId_fkey"
@@ -116,8 +99,4 @@ ALTER TABLE "operation_recommendations"
 
 ALTER TABLE "operation_recommendation_angles"
   ADD CONSTRAINT "operation_recommendation_angles_recommendationId_fkey"
-  FOREIGN KEY ("recommendationId") REFERENCES "operation_recommendations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-ALTER TABLE "operation_decision_records"
-  ADD CONSTRAINT "operation_decision_records_recommendationId_fkey"
   FOREIGN KEY ("recommendationId") REFERENCES "operation_recommendations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

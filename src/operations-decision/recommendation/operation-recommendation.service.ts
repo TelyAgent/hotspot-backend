@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import { Event, PredxNewsItem } from '@prisma/client';
-import { DomainError } from '../../common/errors/domain-error';
 import { JsonObject, JsonValue } from '../../common/types/json.type';
 import { OperationsDecisionRepository } from '../operations-decision.repository';
 import { OperationRecommendationDecision } from '../operations-decision.types';
@@ -144,106 +143,6 @@ export class OperationRecommendationService {
 
   createInboxItem(input: { rawContent: string; source?: string; sourceUrl?: string }) {
     return this.repository.createInboxItem(input);
-  }
-
-  listRecords() {
-    return this.repository.listRecords();
-  }
-
-  async adoptRecommendation(input: {
-    recommendationId: string;
-    angleId: string;
-    operator?: string;
-    note?: string;
-  }) {
-    const recommendation = await this.requireRecommendation(input.recommendationId);
-    const angle = recommendation.angles.find((item) => item.id === input.angleId);
-    if (!angle) {
-      throw new DomainError('承接角度不存在。', 'OPERATION_RECOMMENDATION_ANGLE_NOT_FOUND', {
-        recommendationId: input.recommendationId,
-        angleId: input.angleId,
-      });
-    }
-
-    return this.repository.recordRecommendationDecision({
-      recommendationId: recommendation.id,
-      result: 'adopted',
-      recommendationStatus: 'adopted',
-      finalAngle: angle.claim,
-      operator: input.operator,
-      note: input.note,
-      metadata: {
-        angleId: angle.id,
-        sourceEventId: recommendation.sourceEventId,
-        predxNewsItemId: recommendation.predxNewsItemId,
-      },
-    });
-  }
-
-  async adoptEditedRecommendation(input: {
-    recommendationId: string;
-    angleId?: string;
-    finalAngle: string;
-    operator?: string;
-    note?: string;
-  }) {
-    const recommendation = await this.requireRecommendation(input.recommendationId);
-    const finalAngle = input.finalAngle.trim();
-    if (!finalAngle) {
-      throw new DomainError('修改后的承接角度不能为空。', 'OPERATION_RECOMMENDATION_FINAL_ANGLE_REQUIRED');
-    }
-    const angle =
-      input.angleId != null
-        ? recommendation.angles.find((item) => item.id === input.angleId)
-        : undefined;
-    if (input.angleId && !angle) {
-      throw new DomainError('承接角度不存在。', 'OPERATION_RECOMMENDATION_ANGLE_NOT_FOUND', {
-        recommendationId: input.recommendationId,
-        angleId: input.angleId,
-      });
-    }
-
-    return this.repository.recordRecommendationDecision({
-      recommendationId: recommendation.id,
-      result: 'edited',
-      recommendationStatus: 'adopted',
-      finalAngle,
-      operator: input.operator,
-      note: input.note,
-      metadata: {
-        angleId: angle?.id ?? null,
-        sourceEventId: recommendation.sourceEventId,
-        predxNewsItemId: recommendation.predxNewsItemId,
-      },
-    });
-  }
-
-  async rejectRecommendation(input: {
-    recommendationId: string;
-    operator?: string;
-    note?: string;
-  }) {
-    const recommendation = await this.requireRecommendation(input.recommendationId);
-    return this.repository.recordRecommendationDecision({
-      recommendationId: recommendation.id,
-      result: 'rejected',
-      recommendationStatus: 'rejected',
-      finalAngle: null,
-      operator: input.operator,
-      note: input.note,
-      metadata: {
-        sourceEventId: recommendation.sourceEventId,
-        predxNewsItemId: recommendation.predxNewsItemId,
-      },
-    });
-  }
-
-  private async requireRecommendation(id: string) {
-    const recommendation = await this.repository.findRecommendationById(id);
-    if (!recommendation) {
-      throw new DomainError('选题推荐不存在。', 'OPERATION_RECOMMENDATION_NOT_FOUND', { id });
-    }
-    return recommendation;
   }
 
   private async trySyncPredxNews(pageSize: number) {

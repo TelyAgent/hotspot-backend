@@ -793,10 +793,9 @@ src/mcp/
 第三期考虑开放运营决策数据：
 
 1. `get_operation_recommendations`
-2. `get_operation_decision_records`
-3. `get_product_association_context`
+2. `get_product_association_context`
 
-第三期仍然保持只读，暂不允许外部 Agent 代替运营人员做采用或拒绝。
+第三期仍然保持只读，暂不允许外部 Agent 代替运营人员做采用、拒绝或发布决策。
 
 ## 13. 测试策略
 
