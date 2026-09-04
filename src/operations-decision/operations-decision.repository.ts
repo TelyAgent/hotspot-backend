@@ -67,6 +67,16 @@ export class OperationsDecisionRepository {
     return this.attachEvidenceItems([recommendation]).then((items) => items[0]);
   }
 
+  findRecommendationRecordById(id: string) {
+    return this.prisma.operationRecommendation.findUnique({
+      where: { id },
+      include: {
+        predxNewsItem: true,
+        angles: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+  }
+
   async listRecommendations(input: {
     status?: string;
     basis?: string;
@@ -206,6 +216,92 @@ export class OperationsDecisionRepository {
     });
   }
 
+  upsertRecommendationContentTask(input: {
+    recommendationId: string;
+    contentType: string;
+    contentGoal: string;
+    angle: string;
+    constraints: Prisma.InputJsonValue;
+    evidenceRefs: Prisma.InputJsonValue;
+  }) {
+    const id = getRecommendationContentTaskId(input.recommendationId);
+    return this.prisma.contentTask.upsert({
+      where: { id },
+      create: {
+        id,
+        targetType: 'operation_recommendation',
+        targetId: input.recommendationId,
+        accountId: 'operation-decision',
+        contentType: input.contentType,
+        contentGoal: input.contentGoal,
+        angle: input.angle,
+        constraints: input.constraints,
+        evidenceRefs: input.evidenceRefs,
+        status: 'drafting',
+      },
+      update: {
+        contentType: input.contentType,
+        contentGoal: input.contentGoal,
+        angle: input.angle,
+        constraints: input.constraints,
+        evidenceRefs: input.evidenceRefs,
+        status: 'drafting',
+      },
+    });
+  }
+
+  async markRecommendationContentGenerated(recommendationId: string) {
+    return this.prisma.operationRecommendation.update({
+      where: { id: recommendationId },
+      data: {
+        status: 'content_generated',
+      },
+    });
+  }
+
+  async listApprovedRecommendationDrafts(input: { take?: number } = {}) {
+    const drafts = await this.prisma.contentDraft.findMany({
+      where: {
+        status: 'approved',
+        contentTaskId: {
+          startsWith: 'operation_recommendation:',
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+      take: input.take ?? 100,
+    });
+    const recommendationIds = drafts
+      .map((draft) => draft.contentTaskId.replace('operation_recommendation:', ''))
+      .filter(Boolean);
+    const recommendations = await this.prisma.operationRecommendation.findMany({
+      where: {
+        id: { in: recommendationIds },
+      },
+      include: {
+        angles: { orderBy: { sortOrder: 'asc' } },
+        predxNewsItem: true,
+      },
+    });
+    const recommendationById = new Map(
+      recommendations.map((recommendation) => [recommendation.id, recommendation]),
+    );
+
+    return drafts
+      .map((draft) => {
+        const recommendationId = draft.contentTaskId.replace('operation_recommendation:', '');
+        const recommendation = recommendationById.get(recommendationId);
+        return recommendation
+          ? {
+              draft,
+              recommendation,
+            }
+          : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  }
+
   private async attachEvidenceItems<T extends { evidenceRefs: unknown }>(
     recommendations: T[],
   ): Promise<Array<T & { evidenceItems: OperationRecommendationEvidenceItem[] }>> {
@@ -284,4 +380,8 @@ function toRecord(value: Prisma.JsonValue | null): Record<string, unknown> {
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function getRecommendationContentTaskId(recommendationId: string): string {
+  return `operation_recommendation:${recommendationId}`;
 }

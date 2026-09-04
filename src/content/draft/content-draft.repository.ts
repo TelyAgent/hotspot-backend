@@ -44,6 +44,20 @@ export class ContentDraftRepository {
     }) as unknown as Promise<ContentDraft[]>;
   }
 
+  async updateStatus(
+    id: string,
+    status: ContentDraft['status'],
+  ): Promise<ContentDraft> {
+    return this.prisma.contentDraft.update({
+      where: {
+        id,
+      },
+      data: {
+        status,
+      },
+    }) as unknown as Promise<ContentDraft>;
+  }
+
   async findTaskById(contentTaskId: string) {
     return this.prisma.contentTask.findUnique({
       where: {

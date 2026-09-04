@@ -41,6 +41,8 @@ describe('OperationRecommendationService', () => {
       predxNewsClient as never,
       { decide: jest.fn().mockResolvedValue({ skipped: true }) } as never,
       new ConfigService(),
+      {} as never,
+      {} as never,
     );
 
     const result = await service.generate({ eventTake: 1, newsTake: 0 });
@@ -128,6 +130,8 @@ describe('OperationRecommendationService', () => {
       predxNewsClient as never,
       agent as never,
       new ConfigService(),
+      {} as never,
+      {} as never,
     );
 
     await service.generate({ eventTake: 1, newsTake: 0 });
@@ -236,6 +240,8 @@ describe('OperationRecommendationService', () => {
       predxNewsClient as never,
       agent as never,
       new ConfigService(),
+      {} as never,
+      {} as never,
     );
 
     await service.generate({ eventTake: 1, newsTake: 1 });

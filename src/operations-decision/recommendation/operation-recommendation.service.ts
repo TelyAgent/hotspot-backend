@@ -3,11 +3,37 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import { Event, PredxNewsItem } from '@prisma/client';
+import { ContentDraftRepository } from '../../content/draft/content-draft.repository';
+import { ContentGenerationAgentService } from '../../content/generation/content-generation-agent.service';
+import { ContentTask } from '../../content/content.types';
+import { DomainError } from '../../common/errors/domain-error';
 import { JsonObject, JsonValue } from '../../common/types/json.type';
+import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { OperationsDecisionRepository } from '../operations-decision.repository';
-import { OperationRecommendationDecision } from '../operations-decision.types';
+import {
+  OperationRecommendationDecision,
+  OperationRecommendationEvidenceItem,
+} from '../operations-decision.types';
 import { PredxNewsClientService } from '../predx-news/predx-news-client.service';
 import { OperationRecommendationAgentService } from './operation-recommendation-agent.service';
+
+interface OperationContentDraftInput {
+  angleIds?: string[];
+  goals?: string[];
+  readers?: string[];
+  formats?: string[];
+  userInstruction?: string;
+}
+
+interface OperationContentRevisionInput extends OperationContentDraftInput {
+  body: string;
+  instruction: string;
+}
+
+interface OperationContentAdoptInput extends OperationContentDraftInput {
+  draftId?: string;
+  body?: string;
+}
 
 @Injectable()
 export class OperationRecommendationService {
@@ -16,6 +42,8 @@ export class OperationRecommendationService {
     private readonly predxNewsClient: PredxNewsClientService,
     private readonly agent: OperationRecommendationAgentService,
     private readonly configService: ConfigService,
+    private readonly contentGenerationAgent: ContentGenerationAgentService,
+    private readonly contentDraftRepository: ContentDraftRepository,
   ) {}
 
   async syncPredxNews(input: { pageSize?: number; index?: number } = {}) {
@@ -137,12 +165,297 @@ export class OperationRecommendationService {
     return this.repository.findRecommendationById(id);
   }
 
+  async generateContentDraft(
+    recommendationId: string,
+    input: OperationContentDraftInput,
+  ) {
+    const context = await this.buildContentContext(recommendationId, input);
+    const draft = await this.contentGenerationAgent.generate({
+      contentTask: context.contentTask,
+      accountPersona: this.buildAccountPersona(input),
+      contentRules: this.buildContentRules(input),
+      generationPrompt: this.buildGenerationPrompt(context),
+      evidence: context.evidence,
+      userInstruction: input.userInstruction,
+    });
+
+    return {
+      contentTaskId: context.contentTask.id,
+      draft,
+    };
+  }
+
+  async reviseContentDraft(
+    recommendationId: string,
+    input: OperationContentRevisionInput,
+  ) {
+    if (!input.body.trim()) {
+      throw new DomainError(
+        'Revision requires current draft body.',
+        'OPERATION_CONTENT_BODY_REQUIRED',
+      );
+    }
+    if (!input.instruction.trim()) {
+      throw new DomainError(
+        'Revision instruction is required.',
+        'OPERATION_CONTENT_REVISION_INSTRUCTION_REQUIRED',
+      );
+    }
+
+    const context = await this.buildContentContext(recommendationId, input);
+    const draft = await this.contentGenerationAgent.generate({
+      contentTask: context.contentTask,
+      accountPersona: this.buildAccountPersona(input),
+      contentRules: this.buildContentRules(input),
+      generationPrompt: [
+        this.buildGenerationPrompt(context),
+        '',
+        '请基于下面这版旧稿做修改，不要丢失已经成立的事实边界。',
+        '旧稿：',
+        input.body,
+      ].join('\n'),
+      evidence: context.evidence,
+      userInstruction: input.instruction,
+    });
+
+    return {
+      contentTaskId: context.contentTask.id,
+      draft,
+    };
+  }
+
+  async adoptContentDraft(
+    recommendationId: string,
+    input: OperationContentAdoptInput,
+  ) {
+    if (!input.draftId && !input.body?.trim()) {
+      throw new DomainError(
+        'Adopting content requires draftId or body.',
+        'OPERATION_CONTENT_ADOPT_BODY_REQUIRED',
+      );
+    }
+    const context = await this.buildContentContext(recommendationId, input);
+    let draft = input.draftId
+      ? await this.contentDraftRepository.updateStatus(input.draftId, 'approved')
+      : null;
+
+    if (!draft && input.body?.trim()) {
+      const version = await this.contentDraftRepository.getNextVersion(
+        context.contentTask.id,
+      );
+      draft = await this.contentDraftRepository.create({
+        contentTaskId: context.contentTask.id,
+        version,
+        body: input.body,
+        evidenceRefs: context.contentTask.evidenceRefs,
+        generationInput: {
+          adoptedFrom: 'operation_decision_creation_workspace',
+          recommendationId,
+          selectedAngleIds: input.angleIds ?? [],
+          goals: input.goals ?? [],
+          readers: input.readers ?? [],
+          formats: input.formats ?? [],
+        },
+        userInstruction: null,
+        status: 'approved',
+      });
+    }
+
+    await this.repository.markRecommendationContentGenerated(recommendationId);
+
+    return {
+      contentTaskId: context.contentTask.id,
+      draft,
+      publishPath: '/decision/publish',
+    };
+  }
+
+  async listApprovedContentDrafts(input: { take?: number } = {}) {
+    const items = await this.repository.listApprovedRecommendationDrafts(input);
+    return items.map(({ draft, recommendation }) => {
+      const generationInput = getRecord(draft.generationInput);
+      const contentTaskInput = getRecord(generationInput.contentTask);
+      return {
+        id: draft.id,
+        contentTaskId: draft.contentTaskId,
+        recommendationId: recommendation.id,
+        title: recommendation.title,
+        summary: recommendation.summary,
+        draft: draft.body,
+        status: draft.status,
+        updatedAt: draft.updatedAt,
+        recommendationLabels: readStringArray(recommendation.recommendationLabels),
+        selectedAngle:
+          readString(contentTaskInput.angle) ??
+          recommendation.angles[0]?.claim ??
+          null,
+        format:
+          readString(contentTaskInput.contentType) ??
+          readString(generationInput.format) ??
+          null,
+        predxUrl:
+          recommendation.recommendedProductUrl ??
+          recommendation.predxNewsItem?.primaryMarketUrl ??
+          null,
+      };
+    });
+  }
+
   listInbox() {
     return this.repository.listInbox();
   }
 
   createInboxItem(input: { rawContent: string; source?: string; sourceUrl?: string }) {
     return this.repository.createInboxItem(input);
+  }
+
+  private async buildContentContext(
+    recommendationId: string,
+    input: OperationContentDraftInput,
+  ) {
+    const recommendation = await this.repository.findRecommendationRecordById(
+      recommendationId,
+    );
+    if (!recommendation) {
+      throw new DomainError(
+        'Operation recommendation not found.',
+        'OPERATION_RECOMMENDATION_NOT_FOUND',
+        { recommendationId },
+      );
+    }
+
+    const angleIds = new Set(input.angleIds ?? []);
+    const selectedAngles =
+      angleIds.size > 0
+        ? recommendation.angles.filter((angle) => angleIds.has(angle.id))
+        : recommendation.angles.slice(0, 1);
+    const evidenceRefs = getStringArray(recommendation.evidenceRefs);
+    const contentTask = await this.repository.upsertRecommendationContentTask({
+      recommendationId,
+      contentType: (input.formats?.length ? input.formats : ['X Thread']).join('、'),
+      contentGoal: (input.goals?.length ? input.goals : ['把事情讲清楚']).join('、'),
+      angle: selectedAngles.map((angle) => angle.claim).join('；') || recommendation.reason,
+      constraints: {
+        readers: input.readers ?? [],
+        formats: input.formats ?? [],
+        selectedAngleIds: [...angleIds],
+      },
+      evidenceRefs,
+    });
+    const attached = await this.repository.findRecommendationById(recommendationId);
+    const evidence = this.buildContentEvidence(
+      attached?.evidenceItems ?? [],
+      recommendation,
+    );
+
+    return {
+      recommendation,
+      selectedAngles,
+      contentTask: {
+        ...contentTask,
+        constraints: toStringArray(contentTask.constraints),
+        evidenceRefs,
+      } as unknown as ContentTask,
+      evidence,
+    };
+  }
+
+  private buildContentEvidence(
+    evidenceItems: OperationRecommendationEvidenceItem[],
+    recommendation: Awaited<ReturnType<OperationsDecisionRepository['findRecommendationRecordById']>>,
+  ): EvidenceItem[] {
+    const resolved = evidenceItems.map((item) => ({
+      id: item.id,
+      signalId: null,
+      sourceTool: item.sourceName ?? null,
+      sourceType: item.sourceType,
+      sourceItemId: item.title ?? null,
+      claim: item.summary,
+      text: item.text ?? item.summary,
+      url: item.url ?? null,
+      author: item.authorName ?? null,
+      publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+      observedAt: new Date(item.observedAt),
+      metrics: item.metrics as JsonValue,
+      confidence: normalizeConfidence(item.confidence, 'medium'),
+      rawRef: null,
+      metadata: null,
+      createdAt: new Date(item.observedAt),
+      updatedAt: new Date(item.observedAt),
+    })) satisfies EvidenceItem[];
+
+    if (resolved.length > 0) {
+      return resolved;
+    }
+
+    const now = new Date();
+    return [
+      {
+        id: recommendation?.id ?? 'operation-recommendation',
+        signalId: null,
+        sourceTool: 'operations_decision',
+        sourceType: 'operation_recommendation',
+        sourceItemId: recommendation?.id ?? null,
+        claim: recommendation?.reason ?? '运营推荐进入内容创作。',
+        text: [recommendation?.title, recommendation?.summary, recommendation?.reason]
+          .filter(Boolean)
+          .join('\n'),
+        url: recommendation?.recommendedProductUrl ?? null,
+        author: null,
+        publishedAt: null,
+        observedAt: now,
+        metrics: null,
+        confidence: normalizeConfidence(recommendation?.confidence, 'medium'),
+        rawRef: null,
+        metadata: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+  }
+
+  private buildGenerationPrompt(input: {
+    recommendation: Awaited<ReturnType<OperationsDecisionRepository['findRecommendationRecordById']>>;
+    selectedAngles: Array<{ claim: string; userValue: string | null; targetUser: string | null; productUrl: string | null }>;
+  }): string {
+    const recommendation = input.recommendation;
+    return [
+      '请根据运营决策推荐生成可直接发布的中文内容。',
+      '要求：',
+      '- 只基于给定事件、承接角度、证据和 PredX 连接生成，不补造事实。',
+      '- 输出完整正文，不要解释你的生成过程。',
+      '- 如果是 X Thread，要按 1/、2/ 或分段形式组织。',
+      '',
+      `选题：${recommendation?.title ?? ''}`,
+      `事件摘要：${recommendation?.summary ?? ''}`,
+      `推荐原因：${recommendation?.reason ?? ''}`,
+      `承接判断：${recommendation?.productAssociationRationale ?? ''}`,
+      `推荐链接：${recommendation?.recommendedProductUrl ?? ''}`,
+      `承接角度：${input.selectedAngles.map((angle) => angle.claim).join('；')}`,
+      `目标用户：${input.selectedAngles.map((angle) => angle.targetUser).filter(Boolean).join('；')}`,
+    ].join('\n');
+  }
+
+  private buildAccountPersona(input: OperationContentDraftInput): string {
+    return [
+      '你是 PredX 的运营内容助手。',
+      '表达要克制、清楚、有判断，避免夸张营销腔。',
+      input.readers?.length ? `目标读者：${input.readers.join('、')}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private buildContentRules(input: OperationContentDraftInput): string {
+    return [
+      '所有正文统一使用中文，平台名、产品名、市场名可以保留英文。',
+      '不得编造未提供的事实、数据、来源和链接。',
+      '不得给出投资建议，不把市场概率写成事实结论。',
+      input.goals?.length ? `内容目标：${input.goals.join('、')}` : null,
+      input.formats?.length ? `内容形式：${input.formats.join('、')}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   private async trySyncPredxNews(pageSize: number) {
@@ -598,6 +911,33 @@ function getStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is string =>
+          typeof item === 'string' && item.trim().length > 0,
+      )
+    : [];
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+        .filter(Boolean)
+    : [];
+}
+
+function getRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function toJsonObject(value: unknown): Record<string, unknown> {
