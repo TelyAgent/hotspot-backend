@@ -27,7 +27,6 @@ export class EventLabelingService {
     const labels: EventLabel[] = [];
     labels.push(...this.buildSourceLabels(input.evidence));
     labels.push(...(await this.buildXTrendTriggerLabels(input.evidence)));
-    labels.push(...(await this.buildTopicCircleTriggerLabels(input.evidence)));
     labels.push(...this.buildFutureEventTriggerLabels(input.evidence));
     labels.push(
       ...this.eventDomainLabelService.buildDomainLabels({
@@ -150,46 +149,6 @@ export class EventLabelingService {
     return diff !== null;
   }
 
-  private async buildTopicCircleTriggerLabels(evidence: EvidenceItem[]): Promise<EventLabel[]> {
-    const labels: EventLabel[] = [];
-    const topicEvidence = evidence.filter((item) => sourceTypeToSourcePath(item.sourceType) === 'topic_circle');
-
-    for (const item of topicEvidence) {
-      const metadata = isJsonObject(item.metadata) ? item.metadata : {};
-      const topicWatchId = getString(metadata.topicWatchId);
-      const authorHandle = getString(metadata.authorHandle);
-      if (!topicWatchId || !authorHandle) continue;
-
-      const account = await this.prisma.topicWatchAccount.findFirst({
-        where: {
-          topicWatchId,
-          handle: {
-            equals: normalizeHandle(authorHandle),
-            mode: 'insensitive',
-          },
-          status: 'active',
-        },
-      });
-      if (!account) continue;
-
-      if (account.singleTriggerPolicy === 'S1') {
-        labels.push({
-          code: '第一方确认',
-          name: '第一方确认',
-          category: 'trigger',
-          sourcePath: 'topic_circle',
-          evidenceRefs: [item.id],
-          reason: `@${account.handle} 是 S1 第一方权威账号，权威范围：${account.authorityScope}`,
-          confidence: 'high',
-        });
-      }
-
-      // S2 等账号角色只参与事件判断和证据解释，不作为固定来源/热度筛选标签输出。
-    }
-
-    return dedupeLabels(labels);
-  }
-
   private buildFutureEventTriggerLabels(_evidence: EvidenceItem[]): EventLabel[] {
     return [];
   }
@@ -269,10 +228,6 @@ function dedupeLabels(labels: EventLabel[]) {
 
 function getString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function normalizeHandle(handle: string) {
-  return handle.trim().replace(/^@/, '');
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

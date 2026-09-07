@@ -21,7 +21,6 @@ export class EventTriggerReasonService {
   }): Promise<EventTriggerReason[]> {
     const reasons = [
       ...this.buildXTrendReasons(input.evidence),
-      ...(await this.buildTopicCircleReasons(input.evidence)),
       ...this.buildFutureEventReasons(input.evidence),
     ];
 
@@ -118,56 +117,6 @@ export class EventTriggerReasonService {
     return reasons;
   }
 
-  private async buildTopicCircleReasons(evidence: EvidenceItem[]): Promise<EventTriggerReason[]> {
-    const topicEvidence = evidence.filter((item) => sourceTypeToSourcePath(item.sourceType) === 'topic_circle');
-    const reasons: EventTriggerReason[] = [];
-
-    for (const item of topicEvidence) {
-      const candidate = await this.findTopicCandidate(item);
-      if (!candidate) continue;
-      const metrics = asJsonObject(candidate.metrics);
-      const b3h = getNumber(metrics.b3h);
-      const b24h = getNumber(metrics.b24h);
-      const tmax = getNumber(metrics.tmax);
-      const tmaxTop5Percent = getBoolean(metrics.tmaxTop5Percent);
-
-      if (b3h != null && b3h >= 3) {
-        reasons.push({
-          code: 'TC-01',
-          text: `TC-01：最近 3 小时内出现集中讨论，B3h = ${b3h}，达到 B3h >= 3。`,
-          evidenceRefs: [item.id],
-          sourcePath: 'topic_circle',
-        });
-      }
-      if (b24h != null && b24h >= 6) {
-        reasons.push({
-          code: 'TC-02',
-          text: `TC-02：24 小时内持续热议，B24h = ${b24h}，达到 B24h >= 6。`,
-          evidenceRefs: [item.id],
-          sourcePath: 'topic_circle',
-        });
-      }
-      if (tmax != null && tmax >= 3 && tmaxTop5Percent) {
-        reasons.push({
-          code: 'TC-03',
-          text: `TC-03：单点流量爆发，Tmax = ${formatNumber(tmax)}，且该帖子进入账号近期表现前 5%。`,
-          evidenceRefs: [item.id],
-          sourcePath: 'topic_circle',
-        });
-      }
-      if (b3h != null && b3h >= 2 && tmax != null && tmax >= 2) {
-        reasons.push({
-          code: 'TC-04',
-          text: `TC-04：讨论与流量混合上升，B3h = ${b3h}，Tmax = ${formatNumber(tmax)}。`,
-          evidenceRefs: [item.id],
-          sourcePath: 'topic_circle',
-        });
-      }
-    }
-
-    return reasons;
-  }
-
   private buildFutureEventReasons(evidence: EvidenceItem[]): EventTriggerReason[] {
     return evidence
       .filter((item) => sourceTypeToSourcePath(item.sourceType) === 'future_event')
@@ -180,25 +129,8 @@ export class EventTriggerReasonService {
           text: reason,
           evidenceRefs: [item.id],
           sourcePath: 'future_event',
-        }];
+      }];
       });
-  }
-
-  private async findTopicCandidate(evidence: EvidenceItem): Promise<{ metrics: unknown } | null> {
-    if (!evidence.signalId) return null;
-    return this.prisma.topicCandidate.findFirst({
-      where: {
-        representativeSignalIds: {
-          array_contains: evidence.signalId,
-        },
-      },
-      orderBy: {
-        updatedAt: 'desc',
-      },
-      select: {
-        metrics: true,
-      },
-    });
   }
 }
 
