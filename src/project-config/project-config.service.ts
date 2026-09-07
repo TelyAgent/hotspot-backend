@@ -39,6 +39,7 @@ export class ProjectConfigService implements OnModuleInit {
       'x.trends.kolAccounts',
       defaults.kolRadarAccounts,
     );
+    await this.backfillKolAccounts(defaults.kolRadarAccounts);
   }
 
   async getXTrendCollectionConfig(): Promise<XTrendCollectionConfig> {
@@ -188,6 +189,21 @@ export class ProjectConfigService implements OnModuleInit {
       updatedBy: 'system',
     });
   }
+
+  private async backfillKolAccounts(defaultAccounts: KolRadarAccountConfig[]) {
+    const existing = await this.repository.findByKey('x.trends.kolAccounts');
+    if (!existing) return;
+
+    const merged = mergeKolAccounts(existing.value, defaultAccounts);
+    if (!merged) return;
+
+    await this.repository.upsert({
+      key: 'x.trends.kolAccounts',
+      value: merged,
+      description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolAccounts'],
+      updatedBy: 'system',
+    });
+  }
 }
 
 function normalizeRegions(value: unknown, fallback: string[]): string[] {
@@ -265,6 +281,29 @@ function normalizeKolAccounts(
   }
 
   return accounts.length > 0 ? accounts : fallback;
+}
+
+function mergeKolAccounts(
+  value: unknown,
+  fallback: KolRadarAccountConfig[],
+): KolRadarAccountConfig[] | null {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const normalizedExisting = normalizeKolAccounts(value, fallback);
+  const existingByHandle = new Map(
+    normalizedExisting.map((item) => [normalizeHandle(item.handle), item]),
+  );
+  const merged: KolRadarAccountConfig[] = [...normalizedExisting];
+
+  for (const item of fallback) {
+    const handle = normalizeHandle(item.handle);
+    if (!handle || existingByHandle.has(handle)) continue;
+    merged.push(item);
+  }
+
+  return merged.length === normalizedExisting.length ? null : merged;
 }
 
 function normalizeHandle(value: unknown): string {

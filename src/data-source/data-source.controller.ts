@@ -6,6 +6,7 @@ import { DataSourcePluginRegistry } from './registry/data-source-plugin.registry
 import { XTrendSnapshotService } from './plugins/x-trends/x-trend-snapshot.service';
 import { CollectionRunRepository } from './runner/collection-run.repository';
 import { CollectionRunnerService } from './runner/collection-runner.service';
+import { DataSourceSchedulerService } from './scheduler/data-source-scheduler.service';
 
 @Controller('data-sources')
 export class DataSourceController {
@@ -14,6 +15,7 @@ export class DataSourceController {
     private readonly runner: CollectionRunnerService,
     private readonly collectionRunRepository: CollectionRunRepository,
     private readonly xTrendSnapshotService: XTrendSnapshotService,
+    private readonly dataSourceSchedulerService: DataSourceSchedulerService,
   ) {}
 
   @Get('plugins')
@@ -53,6 +55,11 @@ export class DataSourceController {
       params: toJsonObject(body.params),
       observedAt: body.observedAt ? new Date(String(body.observedAt)) : undefined,
     });
+  }
+
+  @Post('kol-radar/collect')
+  collectKolRadar() {
+    return this.dataSourceSchedulerService.triggerKolRadarCollection();
   }
 }
 

@@ -1,6 +1,14 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ProjectConfigService } from '../../project-config/project-config.service';
+import { CollectionRun } from '../runner/collection-job.types';
 import { CollectionRunRepository } from '../runner/collection-run.repository';
 import { CollectionRunnerService } from '../runner/collection-runner.service';
 
@@ -149,21 +157,11 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
       return;
     }
 
-    this.runningKolRadar = true;
-    this.lastKolRadarStartedAt = now;
-
     try {
-      const run = await this.runner.run({
-        id: 'x-kol-radar-default',
-        pluginId: 'x-account-posts',
-        capabilityId: 'x.account.posts',
-        params: {
-          handles,
-          includeReplies: true,
-          includeQuotes: true,
-          includeReposts: false,
-        },
-        observedAt: nowDate,
+      const run = await this.collectKolRadar({
+        nowDate,
+        handles,
+        jobId: 'x-kol-radar-default',
       });
       this.logger.log(
         `KOL radar scheduled collection finished, run=${run.id}, status=${run.status}, rawItemCount=${run.rawItemCount}`,
@@ -174,6 +172,56 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
           error instanceof Error ? error.message : String(error)
         }`,
       );
+    }
+  }
+
+  async triggerKolRadarCollection(nowDate = new Date()): Promise<CollectionRun> {
+    const collectionConfig =
+      await this.projectConfigService.getXTrendCollectionConfig();
+    const handles = collectionConfig.kolRadarAccounts
+      .filter((account) => account.enabled)
+      .map((account) => account.handle)
+      .filter(Boolean);
+
+    if (handles.length === 0) {
+      throw new BadRequestException('KOL 雷达没有已启用账号，无法立即采集。');
+    }
+
+    return this.collectKolRadar({
+      nowDate,
+      handles,
+      jobId: 'x-kol-radar-manual-refresh',
+    });
+  }
+
+  private async collectKolRadar(input: {
+    nowDate: Date;
+    handles: string[];
+    jobId: string;
+  }): Promise<CollectionRun> {
+    if (this.runningKolRadar) {
+      throw new ConflictException('KOL 雷达采集正在进行中，请稍后再试。');
+    }
+
+    this.runningKolRadar = true;
+    this.lastKolRadarStartedAt = input.nowDate.getTime();
+
+    try {
+      const since = new Date(input.nowDate.getTime() - 6 * 60 * 60 * 1000);
+      return await this.runner.run({
+        id: input.jobId,
+        pluginId: 'x-account-posts',
+        capabilityId: 'x.account.posts',
+        params: {
+          handles: input.handles,
+          since: since.toISOString(),
+          until: input.nowDate.toISOString(),
+          includeReplies: true,
+          includeQuotes: true,
+          includeReposts: false,
+        },
+        observedAt: input.nowDate,
+      });
     } finally {
       this.runningKolRadar = false;
     }

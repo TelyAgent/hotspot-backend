@@ -180,6 +180,18 @@ export class OpenAiModelProvider implements ModelProvider {
         '最终输出必须严格为：',
         '{"type":"final_decision","decision":{"status":"supported|none","title":"中文选题标题","summary":"中文事件摘要","recommendationLabels":["公共热度|实时市场|产品价值"],"basis":"heat|market|product","priority":"immediate|today","reason":"为什么进入推荐","predxOpportunity":{"status":"supported|none","associationLevel":"L1_direct|L2_analogous|L3_thematic|L4_conceptual|none","rationale":"连接层级理由","selectedProductValue":"产品价值","recommendedProductPage":"home|news|market|signal","recommendedProductUrl":"官方链接或市场链接","urlReason":"链接选择原因"},"angles":[{"level":"L1_direct|L2_analogous|L3_thematic|L4_conceptual","claim":"候选承接角度，不是标题文案","targetUser":"目标用户","userValue":"用户价值","evidence":["证据说明或ID"],"productUrl":"推荐链接","riskNotes":["风险"]}],"evidenceRefs":["证据ID"],"missingData":["缺失数据"],"riskNotes":["风险"],"confidence":"high|medium|low"}}',
       ].join('\n'),
+      event_merge: [
+        '当前 agentType=event_merge。',
+        '你要判断 incoming source event context 与 candidate main event 是否指向同一现实事件，并输出结构化 EventMergeAgentDecision。',
+        '必须严格输出完整 JSON，不能省略字段，不能输出 Markdown，不能输出 missingData。',
+        '如果信息不足，也要给出保守判断，并补齐所有字段。',
+        'decision 只能是 auto_merge、keep_independent、create_related_event 之一。',
+        'dimensionResults 必须包含 subject、action、object、time_location、state、core_fact 的对比结果，至少 1 项，但推荐 6 项都返回。',
+        'impact.responseAction 只能是 route_once、route_independently、update_context_only、freeze_candidates、review_published 之一。',
+        'relationSuggestion 仅在 create_related_event 时返回。',
+        '最终输出必须严格为：',
+        '{"type":"final_decision","decision":{"decision":"auto_merge|keep_independent|create_related_event","mergeConfidence":0.0,"hardConflict":false,"dimensionResults":[{"dimension":"subject|action|object|time_location|state|core_fact","label":"中文维度名","score":0.0,"result":"compatible|conflict|uncertain","comparison":"中文对比说明","evidenceRefs":["证据ID"]}],"conflictPoints":["冲突点"],"relationSuggestion":{"relationType":"follow_up|official_result|change|correction|reversal|parent_child","reason":"中文原因"},"impact":{"responseAction":"route_once|route_independently|update_context_only|freeze_candidates|review_published","reason":"中文原因"},"evidenceRefs":["证据ID"]}}',
+      ].join('\n'),
       future_event_discovery: [
         '当前 agentType=future_event_discovery。',
         '你要从 goal.signals 中发现值得运营提前关注的未来事件候选。',
