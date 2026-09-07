@@ -17,7 +17,6 @@ import { OperationsDecisionModule } from './operations-decision/operations-decis
 import { PerformanceModule } from './performance/performance.module';
 import { ProjectConfigModule } from './project-config/project-config.module';
 import { SignalModule } from './signal/signal.module';
-import { TopicWatchModule } from './topic-watch/topic-watch.module';
 import { YoutubeModule } from './youtube/youtube.module';
 
 @Module({
@@ -32,7 +31,6 @@ import { YoutubeModule } from './youtube/youtube.module';
     AgentModule,
     AssistantModule,
     FutureEventModule,
-    TopicWatchModule,
     OpportunityModule,
     OperationsDecisionModule,
     AssignmentModule,

@@ -32,10 +32,23 @@ export class ProjectConfigController {
           typeof body.trendCollectionEnabled === 'boolean'
             ? body.trendCollectionEnabled
             : undefined,
-        topicWatchSchedulerEnabled:
-          typeof body.topicWatchSchedulerEnabled === 'boolean'
-            ? body.topicWatchSchedulerEnabled
+        kolRadarEnabled:
+          typeof body.kolRadarEnabled === 'boolean'
+            ? body.kolRadarEnabled
             : undefined,
+        kolRadarCollectionIntervalMs:
+          typeof body.kolRadarCollectionIntervalMs === 'number'
+            ? body.kolRadarCollectionIntervalMs
+            : undefined,
+        kolRadarAccounts: Array.isArray(body.kolRadarAccounts)
+          ? body.kolRadarAccounts.map((item) => ({
+              handle: String(item?.handle ?? ''),
+              groupTag:
+                typeof item?.groupTag === 'string' ? item.groupTag : null,
+              joinedAt: String(item?.joinedAt ?? ''),
+              enabled: Boolean(item?.enabled),
+            }))
+          : undefined,
       },
       'api',
     );

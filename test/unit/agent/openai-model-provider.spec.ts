@@ -239,18 +239,12 @@ describe('OpenAiModelProvider', () => {
       ...createInput(),
       agentType: 'assistant',
       goal: {
-        message: '预测市场行业添加监控账号 @Jason',
+        message: '把热榜采集条数调整为 20',
       },
       availableTools: [
         {
-          name: 'topicWatch.list',
-          description: '读取全部重点主题配置。',
-          permission: 'read' as const,
-          execute: jest.fn(),
-        },
-        {
-          name: 'signal.getRecent',
-          description: '读取最近信号。',
+          name: 'projectConfig.getXTrendConfig',
+          description: '读取 X 热榜配置。',
           permission: 'read' as const,
           execute: jest.fn(),
         },
@@ -261,10 +255,10 @@ describe('OpenAiModelProvider', () => {
       String((global.fetch as jest.Mock).mock.calls[0][1].body),
     ) as { input: Array<{ content: Array<{ text: string }> }> };
     expect(body.input[0].content[0].text).toContain(
-      '配置编辑：如果用户要求添加、删除、修改主题圈或监控账号，必须先调用 topicWatch.list 或 topicWatch.get 找到目标配置',
+      '配置编辑：如果用户要求修改 X/Twitter 热榜配置，最终只输出 proposedActions 等待用户确认，不要声称已经修改',
     );
     expect(body.input[0].content[0].text).toContain(
-      '不要把无关的最近信号当作答案',
+      '配置读取：如果用户问 Twitter/X 配置，优先调用配置工具；X/Twitter 热榜采集地区、条数、频率必须调用 projectConfig.getXTrendConfig；不要调用 signal/event/evidence 工具。',
     );
     expect(body.input[0].content[0].text).toContain('proposedActions');
   });

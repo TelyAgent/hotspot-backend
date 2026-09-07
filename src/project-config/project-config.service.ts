@@ -4,7 +4,8 @@ import {
   PROJECT_CONFIG_DESCRIPTIONS,
 } from './project-config.defaults';
 import { ProjectConfigRepository } from './project-config.repository';
-import { XTrendCollectionConfig } from './project-config.types';
+import { KolRadarAccountConfig, XTrendCollectionConfig } from './project-config.types';
+import { JsonValue } from '../common/types/json.type';
 
 @Injectable()
 export class ProjectConfigService implements OnModuleInit {
@@ -27,8 +28,16 @@ export class ProjectConfigService implements OnModuleInit {
       defaults.trendCollectionEnabled,
     );
     await this.seedDefault(
-      'topicWatch.schedulerEnabled',
-      defaults.topicWatchSchedulerEnabled,
+      'x.trends.kolRadarEnabled',
+      defaults.kolRadarEnabled,
+    );
+    await this.seedDefault(
+      'x.trends.kolRadarCollectionIntervalMs',
+      defaults.kolRadarCollectionIntervalMs,
+    );
+    await this.seedDefault(
+      'x.trends.kolAccounts',
+      defaults.kolRadarAccounts,
     );
   }
 
@@ -39,13 +48,17 @@ export class ProjectConfigService implements OnModuleInit {
       limitConfig,
       intervalConfig,
       trendCollectionEnabledConfig,
-      topicWatchSchedulerEnabledConfig,
+      kolRadarEnabledConfig,
+      kolRadarIntervalConfig,
+      kolAccountsConfig,
     ] = await Promise.all([
       this.repository.findByKey('x.trends.regions'),
       this.repository.findByKey('x.trends.limit'),
       this.repository.findByKey('x.trends.collectionIntervalMs'),
       this.repository.findByKey('x.trends.collectionEnabled'),
-      this.repository.findByKey('topicWatch.schedulerEnabled'),
+      this.repository.findByKey('x.trends.kolRadarEnabled'),
+      this.repository.findByKey('x.trends.kolRadarCollectionIntervalMs'),
+      this.repository.findByKey('x.trends.kolAccounts'),
     ]);
 
     return {
@@ -59,9 +72,17 @@ export class ProjectConfigService implements OnModuleInit {
         trendCollectionEnabledConfig?.value,
         defaults.trendCollectionEnabled,
       ),
-      topicWatchSchedulerEnabled: normalizeBoolean(
-        topicWatchSchedulerEnabledConfig?.value,
-        defaults.topicWatchSchedulerEnabled,
+      kolRadarEnabled: normalizeBoolean(
+        kolRadarEnabledConfig?.value,
+        defaults.kolRadarEnabled,
+      ),
+      kolRadarCollectionIntervalMs: normalizePositiveNumber(
+        kolRadarIntervalConfig?.value,
+        defaults.kolRadarCollectionIntervalMs,
+      ),
+      kolRadarAccounts: normalizeKolAccounts(
+        kolAccountsConfig?.value,
+        defaults.kolRadarAccounts,
       ),
     };
   }
@@ -112,11 +133,36 @@ export class ProjectConfigService implements OnModuleInit {
       });
     }
 
-    if (typeof patch.topicWatchSchedulerEnabled === 'boolean') {
+    if (typeof patch.kolRadarEnabled === 'boolean') {
       await this.repository.upsert({
-        key: 'topicWatch.schedulerEnabled',
-        value: patch.topicWatchSchedulerEnabled,
-        description: PROJECT_CONFIG_DESCRIPTIONS['topicWatch.schedulerEnabled'],
+        key: 'x.trends.kolRadarEnabled',
+        value: patch.kolRadarEnabled,
+        description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolRadarEnabled'],
+        updatedBy,
+      });
+    }
+
+    if (typeof patch.kolRadarCollectionIntervalMs === 'number') {
+      await this.repository.upsert({
+        key: 'x.trends.kolRadarCollectionIntervalMs',
+        value: normalizePositiveNumber(
+          patch.kolRadarCollectionIntervalMs,
+          DEFAULT_X_TREND_COLLECTION_CONFIG.kolRadarCollectionIntervalMs,
+        ),
+        description:
+          PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolRadarCollectionIntervalMs'],
+        updatedBy,
+      });
+    }
+
+    if (patch.kolRadarAccounts) {
+      await this.repository.upsert({
+        key: 'x.trends.kolAccounts',
+        value: normalizeKolAccounts(
+          patch.kolRadarAccounts,
+          DEFAULT_X_TREND_COLLECTION_CONFIG.kolRadarAccounts,
+        ),
+        description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolAccounts'],
         updatedBy,
       });
     }
@@ -128,7 +174,7 @@ export class ProjectConfigService implements OnModuleInit {
     return this.repository.list();
   }
 
-  private async seedDefault(key: string, value: string[] | number | boolean) {
+  private async seedDefault(key: string, value: JsonValue) {
     const existing = await this.repository.findByKey(key);
 
     if (existing) {
@@ -181,4 +227,67 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   }
 
   return fallback;
+}
+
+function normalizeKolAccounts(
+  value: unknown,
+  fallback: KolRadarAccountConfig[],
+): KolRadarAccountConfig[] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const fallbackByHandle = new Map(
+    fallback.map((item) => [normalizeHandle(item.handle), item]),
+  );
+  const seen = new Set<string>();
+  const accounts: KolRadarAccountConfig[] = [];
+
+  for (const item of value) {
+    if (!isPlainObject(item)) continue;
+    const handle = normalizeHandle(item.handle);
+    if (!handle || seen.has(handle)) continue;
+
+    const fallbackItem = fallbackByHandle.get(handle);
+    const joinedAt = normalizeDateString(item.joinedAt, fallbackItem?.joinedAt);
+    if (!joinedAt) continue;
+
+    accounts.push({
+      handle,
+      groupTag: normalizeOptionalString(item.groupTag),
+      joinedAt,
+      enabled: normalizeBoolean(
+        item.enabled,
+        fallbackItem?.enabled ?? true,
+      ),
+    });
+    seen.add(handle);
+  }
+
+  return accounts.length > 0 ? accounts : fallback;
+}
+
+function normalizeHandle(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/^@/, '') : '';
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const next = value.trim();
+  return next ? next : null;
+}
+
+function normalizeDateString(value: unknown, fallback?: string): string | null {
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return fallback ?? null;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

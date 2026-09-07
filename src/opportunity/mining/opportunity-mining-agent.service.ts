@@ -1,18 +1,28 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DomainError } from '../../common/errors/domain-error';
-import { JsonObject } from '../../common/types/json.type';
+import { JsonObject, JsonValue } from '../../common/types/json.type';
 import { AGENT_WORKFLOW_ENGINE } from '../../agent/agent.tokens';
 import { AgentWorkflowEngine } from '../../agent/workflow-engine/agent-workflow-engine.interface';
 import { EnrichedEvidencePackage } from '../../signal/enrichment/signal-evidence-enrichment.types';
 import { EvidenceItem } from '../../signal/evidence/evidence.types';
 import { Signal } from '../../signal/signal/signal.types';
-import { TopicCandidate } from '../../topic-watch/topic-watch.types';
 import { OpportunityMiningDecision } from '../opportunity.types';
 import { OpportunityMiningDecisionValidator } from './opportunity-mining-decision.validator';
 import {
   OpportunityMiningAgentResult,
   OpportunityMiningGoal,
 } from './opportunity-mining-goal.types';
+
+interface TopicCandidate {
+  id: string;
+  title?: string;
+  summary?: string;
+  signalCount?: number;
+  postCount?: number | null;
+  accountCount?: number | null;
+  evidenceRefs?: unknown;
+  metrics?: unknown;
+}
 
 @Injectable()
 export class OpportunityMiningAgentService {
@@ -247,18 +257,22 @@ export class OpportunityMiningAgentService {
   private serializeTopicCandidate(candidate: TopicCandidate): JsonObject {
     return {
       id: candidate.id,
-      title: candidate.title,
-      summary: candidate.summary,
-      signalCount: candidate.signalCount,
+      title: candidate.title ?? null,
+      summary: candidate.summary ?? null,
+      signalCount: candidate.signalCount ?? null,
       postCount: candidate.postCount ?? null,
       accountCount: candidate.accountCount ?? null,
-      evidenceRefs: candidate.evidenceRefs,
-      metrics: candidate.metrics,
+      evidenceRefs: this.toJsonValue(candidate.evidenceRefs ?? null),
+      metrics: this.toJsonValue(candidate.metrics ?? null),
     };
   }
 
   private toJsonObject(value: unknown): JsonObject {
     return value as JsonObject;
+  }
+
+  private toJsonValue(value: unknown): JsonValue {
+    return value as JsonValue;
   }
 }
 

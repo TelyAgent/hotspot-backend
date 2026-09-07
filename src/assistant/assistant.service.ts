@@ -5,11 +5,6 @@ import { DomainError } from '../common/errors/domain-error';
 import { JsonObject, JsonValue } from '../common/types/json.type';
 import { ProjectConfigService } from '../project-config/project-config.service';
 import {
-  TopicWatchSingleTriggerPolicy,
-  TopicWatchStatus,
-} from '../topic-watch/topic-watch.types';
-import { TopicWatchRepository } from '../topic-watch/topic-watch.repository';
-import {
   AssistantChatInput,
   AssistantChatResponse,
   AssistantProposedAction,
@@ -22,7 +17,6 @@ import {
 export class AssistantService {
   constructor(
     private readonly projectConfigService: ProjectConfigService,
-    private readonly topicWatchRepository: TopicWatchRepository,
     @Optional()
     @Inject(AGENT_WORKFLOW_ENGINE)
     private readonly workflowEngine?: AgentWorkflowEngine,
@@ -34,8 +28,7 @@ export class AssistantService {
 
     if (proposedActions.length > 0) {
       return {
-        message:
-          '我理解你的修改意图了。下面是我准备执行的配置变更，请确认后再应用。',
+        message: '我理解你的修改意图了。下面是我准备执行的配置变更，请确认后再应用。',
         proposedActions,
       };
     }
@@ -48,12 +41,6 @@ export class AssistantService {
     const agentResponse = await this.runAssistantAgent(input, message);
     if (agentResponse) {
       return agentResponse;
-    }
-
-    if (this.isTopicWatchListQuestion(message)) {
-      return {
-        message: await this.describeTopicWatches(),
-      };
     }
 
     return {
@@ -97,17 +84,6 @@ export class AssistantService {
             'assistant',
           ),
         };
-      case 'list_twitter_topics':
-        return {
-          message: '已读取重点主题配置。',
-          result: await this.topicWatchRepository.listTopicWatches(),
-        };
-      case 'upsert_twitter_topic':
-        return this.upsertTwitterTopic(input.arguments);
-      case 'add_twitter_topic_account':
-        return this.addTwitterTopicAccount(input.arguments);
-      case 'remove_twitter_topic_account':
-        return this.removeTwitterTopicAccount(input.arguments);
       default:
         throw new DomainError(
           `Unsupported assistant tool: ${input.tool}`,
@@ -171,12 +147,11 @@ export class AssistantService {
       return null;
     }
 
-    return this.extractAssistantResponse(result.result, message);
+    return this.extractAssistantResponse(result.result);
   }
 
   private extractAssistantResponse(
     value: JsonValue | undefined,
-    originalMessage: string,
   ): AssistantChatResponse | null {
     if (!isJsonObject(value)) {
       return null;
@@ -187,10 +162,7 @@ export class AssistantService {
       return null;
     }
 
-    const proposedActions = this.extractAgentProposedActions(
-      value.proposedActions,
-      originalMessage,
-    );
+    const proposedActions = this.extractAgentProposedActions(value.proposedActions);
 
     return {
       message: message.trim(),
@@ -198,25 +170,19 @@ export class AssistantService {
     };
   }
 
-  private extractAgentProposedActions(
-    value: JsonValue | undefined,
-    originalMessage: string,
-  ) {
+  private extractAgentProposedActions(value: JsonValue | undefined) {
     if (!Array.isArray(value)) {
       return [];
     }
 
     return value
-      .map((item, index) =>
-        this.parseAgentProposedAction(item, index, originalMessage),
-      )
+      .map((item, index) => this.parseAgentProposedAction(item, index))
       .filter((item): item is AssistantProposedAction => item !== null);
   }
 
   private parseAgentProposedAction(
     value: JsonValue,
     index: number,
-    originalMessage: string,
   ): AssistantProposedAction | null {
     if (!isJsonObject(value)) {
       return null;
@@ -232,13 +198,6 @@ export class AssistantService {
         ? value.summary.trim()
         : `待确认操作：${value.tool}`;
 
-    const argumentsWithContext = this.enrichActionArguments(
-      tool,
-      value.arguments,
-      originalMessage,
-      summary,
-    );
-
     return {
       id:
         typeof value.id === 'string' && value.id.trim()
@@ -246,34 +205,8 @@ export class AssistantService {
           : `assistant_agent_action_${Date.now()}_${index}`,
       tool,
       summary,
-      arguments: argumentsWithContext,
+      arguments: value.arguments,
       requiresConfirmation: true,
-    };
-  }
-
-  private enrichActionArguments(
-    tool: AssistantToolName,
-    args: JsonObject,
-    originalMessage: string,
-    summary: string,
-  ): JsonObject {
-    if (
-      tool !== 'add_twitter_topic_account' &&
-      tool !== 'remove_twitter_topic_account'
-    ) {
-      return args;
-    }
-
-    const topicRef = this.extractTopicRefFromText(originalMessage) ??
-      this.extractTopicRefFromText(summary);
-    const handle = getString(args.handle) ??
-      this.extractHandleFromText(originalMessage) ??
-      this.extractHandleFromText(summary);
-
-    return {
-      ...args,
-      ...(topicRef && !hasTopicRef(args) ? { topicName: topicRef } : {}),
-      ...(handle && !getString(args.handle) ? { handle } : {}),
     };
   }
 
@@ -288,32 +221,27 @@ export class AssistantService {
 
   private classifyIntentHint(message: string): JsonObject {
     if (
-      /(添加|新增|加上|删除|移除|修改|更新|编辑|调整).*(主题圈|重点主题|关注圈层|主题追踪|监控账号|账号|配置|热榜|热搜|采集频率|榜单)/.test(
+      /(修改|更新|调整|设置|配置).*(X|Twitter|推特|热榜|热搜|榜单|采集|频率|间隔|条数)/.test(
         message,
       )
     ) {
       return {
         type: 'config_edit',
         guidance:
-          '先读取相关配置，找到目标主题或配置项，再输出 proposedActions 等待用户确认；不要查询无关 Signal。',
-        preferredTools: ['projectConfig.getXTrendConfig', 'topicWatch.list', 'topicWatch.get'],
+          '先读取相关配置，再输出 proposedActions 等待用户确认；不要查询无关 Signal。',
+        preferredTools: ['projectConfig.getXTrendConfig'],
       };
     }
 
     if (
-      /(主题圈|重点主题|关注圈层|主题追踪|监控账号|配置|热榜|热搜|采集频率|榜单).*(哪些|什么|多少|查看|列表|当前|现在|已有|有哪些)|^(我现在|当前).*(主题圈|配置)/.test(
+      /(X|Twitter|推特|热榜|热搜|榜单).*(哪些|什么|多少|查看|列表|当前|现在|已有|有哪些)|^(我现在|当前).*(配置)/.test(
         message,
       )
     ) {
       return {
         type: 'config_read',
         guidance: '优先调用配置类工具，不要把最近 Signal 当作配置答案。',
-        preferredTools: [
-          'projectConfig.getXTrendConfig',
-          'topicWatch.list',
-          'topicWatch.get',
-          'topicWatch.listActive',
-        ],
+        preferredTools: ['projectConfig.getXTrendConfig'],
       };
     }
 
@@ -321,14 +249,8 @@ export class AssistantService {
       return {
         type: 'diagnosis',
         guidance:
-          '可以组合读取配置、候选、信号、事件和证据，按数据链路解释原因。',
-        preferredTools: [
-          'topicWatch.list',
-          'topicWatch.getCandidates',
-          'signal.getRecent',
-          'event.findSimilar',
-          'evidence.search',
-        ],
+          '可以组合读取配置、信号、事件和证据，按数据链路解释原因。',
+        preferredTools: ['signal.getRecent', 'event.findSimilar', 'evidence.search'],
       };
     }
 
@@ -353,17 +275,6 @@ export class AssistantService {
     };
   }
 
-  private isTopicWatchListQuestion(message: string): boolean {
-    const asksTopic =
-      /(主题圈|重点主题|关注圈层|主题追踪|topic)/i.test(message);
-    const asksList =
-      /(哪些|什么|多少|配置|列表|查看|列出|现在|当前|已有|有哪些)/.test(
-        message,
-      );
-
-    return asksTopic && asksList;
-  }
-
   private isXTrendConfigQuestion(message: string): boolean {
     const asksXTrend = /(X|Twitter|推特|热榜|热搜|榜单)/i.test(message);
     const asksConfig =
@@ -377,38 +288,9 @@ export class AssistantService {
     return asksXTrend && asksConfig && asksRead;
   }
 
-  private async describeTopicWatches(): Promise<string> {
-    const topics = await this.topicWatchRepository.listTopicWatches();
-
-    if (topics.length === 0) {
-      return '当前还没有配置主题圈。';
-    }
-
-    const lines = [`当前已配置 ${topics.length} 个主题圈：`];
-    topics.forEach((topic, index) => {
-      const accounts = topic.accounts ?? [];
-      const status = formatTopicWatchStatus(topic.status);
-      const domains = topic.domains.length
-        ? `；领域：${topic.domains.join('、')}`
-        : '';
-      const accountPreview = accounts.length
-        ? `；账号：${accounts
-            .slice(0, 5)
-            .map((account) => `@${account.handle.replace(/^@/, '')}`)
-            .join('、')}${accounts.length > 5 ? ` 等 ${accounts.length} 个` : ''}`
-        : '；暂未配置监控账号';
-
-      lines.push(
-        `${index + 1}. ${topic.name}（${status}，${accounts.length} 个监控账号${domains}${accountPreview}）`,
-      );
-    });
-
-    return lines.join('\n');
-  }
-
   private defaultReply(input: AssistantChatInput): string {
     const page = input.context.page || '当前页面';
-    return `我在 ${page} 页面。你可以让我查看 Twitter 配置、调整热榜条数/采集频率，或管理重点主题追踪配置。涉及修改时我会先给出待确认操作。`;
+    return `我在 ${page} 页面。你可以让我查看 Twitter 配置，或调整热榜条数/采集频率。涉及修改时我会先给出待确认操作。`;
   }
 
   private extractTrendLimit(message: string): number | null {
@@ -459,192 +341,6 @@ export class AssistantService {
           : undefined,
     };
   }
-
-  private async upsertTwitterTopic(
-    input: JsonObject,
-  ): Promise<AssistantToolExecutionResponse> {
-    const topicWatchId = getString(input.id) ?? getString(input.topicWatchId);
-    const status: TopicWatchStatus =
-      getString(input.status) === 'paused' ? 'paused' : 'active';
-    const payload = {
-      name: getString(input.name) ?? '未命名主题',
-      description: getString(input.description) ?? '',
-      domains: getStringArray(input.domains),
-      watchIntent: getString(input.watchIntent) ?? '',
-      collectionPolicy: getString(input.collectionPolicy) ?? '',
-      triggerPolicy: getString(input.triggerPolicy) ?? '',
-      evidencePolicy: getString(input.evidencePolicy) ?? '',
-      exclusionPolicy: getString(input.exclusionPolicy),
-      status,
-    };
-
-    const result = topicWatchId
-      ? await this.topicWatchRepository.updateTopicWatch(topicWatchId, payload)
-      : await this.topicWatchRepository.createTopicWatch(payload);
-
-    return {
-      message: topicWatchId ? '已更新重点主题。' : '已创建重点主题。',
-      result,
-    };
-  }
-
-  private async addTwitterTopicAccount(
-    input: JsonObject,
-  ): Promise<AssistantToolExecutionResponse> {
-    const topicWatchId = await this.resolveTopicWatchId(input);
-    const handle = getRequiredString(input.handle, 'handle');
-    const topic = await this.topicWatchRepository.findTopicWatchById(topicWatchId);
-
-    if (!topic) {
-      throw new DomainError('Topic watch not found.', 'TOPIC_WATCH_NOT_FOUND');
-    }
-
-    const accounts = [
-      ...(topic.accounts ?? []).map((account, index) => ({
-        handle: account.handle,
-        primaryRole: account.primaryRole,
-        singleTriggerPolicy: account.singleTriggerPolicy,
-        authorityScope: account.authorityScope,
-        status: account.status,
-        sortOrder: account.sortOrder ?? index + 1,
-      })),
-      {
-        handle,
-        primaryRole: getString(input.primaryRole) ?? '重点主题监控账号',
-        singleTriggerPolicy: normalizePolicy(input.singleTriggerPolicy),
-        authorityScope: getString(input.authorityScope) ?? '按账号公开信息与帖子内容判断',
-        status: 'active' as const,
-        sortOrder: (topic.accounts?.length ?? 0) + 1,
-      },
-    ];
-
-    return {
-      message: '已添加重点主题监控账号。',
-      result: await this.topicWatchRepository.updateTopicWatchAccounts(
-        topicWatchId,
-        accounts,
-      ),
-    };
-  }
-
-  private async removeTwitterTopicAccount(
-    input: JsonObject,
-  ): Promise<AssistantToolExecutionResponse> {
-    const topicWatchId = await this.resolveTopicWatchId(input);
-    const handle = normalizeHandle(getRequiredString(input.handle, 'handle'));
-    const topic = await this.topicWatchRepository.findTopicWatchById(topicWatchId);
-
-    if (!topic) {
-      throw new DomainError('Topic watch not found.', 'TOPIC_WATCH_NOT_FOUND');
-    }
-
-    return {
-      message: '已移除重点主题监控账号。',
-      result: await this.topicWatchRepository.updateTopicWatchAccounts(
-        topicWatchId,
-        (topic.accounts ?? [])
-          .filter((account) => normalizeHandle(account.handle) !== handle)
-          .map((account, index) => ({
-            handle: account.handle,
-            primaryRole: account.primaryRole,
-            singleTriggerPolicy: account.singleTriggerPolicy,
-            authorityScope: account.authorityScope,
-            status: account.status,
-            sortOrder: index + 1,
-          })),
-      ),
-    };
-  }
-
-  private async resolveTopicWatchId(input: JsonObject): Promise<string> {
-    const directId = getString(input.topicWatchId) ?? getString(input.id);
-    if (directId) {
-      const directTopic = await this.topicWatchRepository.findTopicWatchById(
-        directId,
-      );
-      if (directTopic) {
-        return directTopic.id;
-      }
-    }
-
-    const name =
-      getString(input.topicName) ??
-      getString(input.topicWatchName) ??
-      getString(input.name) ??
-      getString(input.topic) ??
-      this.extractTopicRefFromText(getString(input.actionSummary) ?? '') ??
-      this.extractTopicRefFromText(getString(input.summary) ?? '');
-    if (!name) {
-      throw new DomainError(
-        'Assistant tool argument is required: topicWatchId or topicName',
-        'ASSISTANT_TOPIC_WATCH_REF_REQUIRED',
-      );
-    }
-
-    const topics = await this.topicWatchRepository.listTopicWatches();
-    const normalizedName = normalizeText(name);
-    const exact = topics.find(
-      (topic) =>
-        normalizeText(topic.name) === normalizedName ||
-        topic.domains.some((domain) => normalizeText(domain) === normalizedName),
-    );
-    if (exact) {
-      return exact.id;
-    }
-
-    const fuzzy = topics.find((topic) => {
-      const topicName = normalizeText(topic.name);
-      return (
-        topicName.includes(normalizedName) ||
-        normalizedName.includes(topicName) ||
-        topic.domains.some((domain) => {
-          const domainName = normalizeText(domain);
-          return (
-            domainName.includes(normalizedName) ||
-            normalizedName.includes(domainName)
-          );
-        })
-      );
-    });
-    if (fuzzy) {
-      return fuzzy.id;
-    }
-
-    throw new DomainError('Topic watch not found.', 'TOPIC_WATCH_NOT_FOUND', {
-      topicWatchId: directId,
-      topicName: name,
-    });
-  }
-
-  private extractTopicRefFromText(text: string): string | null {
-    const normalized = text.trim();
-    if (!normalized) {
-      return null;
-    }
-
-    const quotedMatch = normalized.match(/[“"']([^“"']+)[”"']/);
-    if (quotedMatch?.[1]?.trim()) {
-      return quotedMatch[1].trim();
-    }
-
-    const beforeAccountAction = normalized.match(
-      /(.+?)(?:添加|新增|加上|删除|移除|修改|更新|编辑|调整).*?(?:监控账号|账号|@)/,
-    );
-    if (beforeAccountAction?.[1]?.trim()) {
-      return stripTopicDecorations(beforeAccountAction[1]);
-    }
-
-    return null;
-  }
-
-  private extractHandleFromText(text: string): string | null {
-    const match = text.match(/@([A-Za-z0-9_]+)/);
-    return match?.[1] ? match[1] : null;
-  }
-}
-
-function getString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
@@ -655,70 +351,8 @@ function isAssistantToolName(value: unknown): value is AssistantToolName {
   return (
     value === 'get_twitter_config' ||
     value === 'update_twitter_config' ||
-    value === 'list_twitter_topics' ||
-    value === 'upsert_twitter_topic' ||
-    value === 'add_twitter_topic_account' ||
-    value === 'remove_twitter_topic_account' ||
     value === 'set_twitter_trend_schedule'
   );
-}
-
-function getRequiredString(value: unknown, field: string): string {
-  const result = getString(value);
-  if (!result) {
-    throw new DomainError(
-      `Assistant tool argument is required: ${field}`,
-      'ASSISTANT_TOOL_ARGUMENT_REQUIRED',
-      { field },
-    );
-  }
-  return result;
-}
-
-function getStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean) : [];
-}
-
-function normalizePolicy(value: unknown): TopicWatchSingleTriggerPolicy {
-  return value === 'S1' || value === 'S2' || value === 'C' ? value : 'C';
-}
-
-function normalizeHandle(value: string): string {
-  return value.trim().replace(/^@/, '').toLowerCase();
-}
-
-function normalizeText(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '');
-}
-
-function hasTopicRef(input: JsonObject): boolean {
-  return Boolean(
-    getString(input.topicWatchId) ??
-      getString(input.id) ??
-      getString(input.topicName) ??
-      getString(input.topicWatchName) ??
-      getString(input.name) ??
-      getString(input.topic),
-  );
-}
-
-function stripTopicDecorations(value: string): string {
-  return value
-    .replace(/^给/, '')
-    .replace(/^(主题圈|重点主题|关注圈层|主题追踪)/, '')
-    .replace(/(主题圈|重点主题|关注圈层|主题追踪)$/, '')
-    .trim();
-}
-
-function formatTopicWatchStatus(status: TopicWatchStatus): string {
-  switch (status) {
-    case 'active':
-      return '启用';
-    case 'paused':
-      return '暂停';
-    case 'archived':
-      return '已归档';
-  }
 }
 
 function formatDuration(ms: number): string {

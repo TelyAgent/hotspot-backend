@@ -1,4 +1,4 @@
-import { JsonValue } from '../common/types/json.type';
+import { JsonObject, JsonValue } from '../common/types/json.type';
 
 export interface ProjectConfig {
   key: string;
@@ -9,10 +9,19 @@ export interface ProjectConfig {
   updatedAt?: Date;
 }
 
+export interface KolRadarAccountConfig extends JsonObject {
+  handle: string;
+  groupTag: string | null;
+  joinedAt: string;
+  enabled: boolean;
+}
+
 export interface XTrendCollectionConfig {
   regions: string[];
   limit: number;
   collectionIntervalMs: number;
   trendCollectionEnabled: boolean;
-  topicWatchSchedulerEnabled: boolean;
+  kolRadarEnabled: boolean;
+  kolRadarCollectionIntervalMs: number;
+  kolRadarAccounts: KolRadarAccountConfig[];
 }

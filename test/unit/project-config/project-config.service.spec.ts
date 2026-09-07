@@ -14,7 +14,40 @@ describe('ProjectConfigService', () => {
       limit: 30,
       collectionIntervalMs: 10800000,
       trendCollectionEnabled: true,
-      topicWatchSchedulerEnabled: true,
+      kolRadarEnabled: true,
+      kolRadarCollectionIntervalMs: 21600000,
+      kolRadarAccounts: [
+        {
+          handle: 'OpenAI',
+          groupTag: 'AI / 产品',
+          joinedAt: '2026-08-26T06:33:01.015Z',
+          enabled: true,
+        },
+        {
+          handle: 'AnthropicAI',
+          groupTag: 'AI / 产品',
+          joinedAt: '2026-08-26T06:33:01.021Z',
+          enabled: true,
+        },
+        {
+          handle: 'GoogleDeepMind',
+          groupTag: 'AI / 研究',
+          joinedAt: '2026-08-26T06:33:01.024Z',
+          enabled: true,
+        },
+        {
+          handle: 'Polymarket',
+          groupTag: '预测市场',
+          joinedAt: '2026-08-26T06:33:01.077Z',
+          enabled: true,
+        },
+        {
+          handle: 'BLS_gov',
+          groupTag: '宏观数据',
+          joinedAt: '2026-08-26T06:33:01.062Z',
+          enabled: true,
+        },
+      ],
     });
   });
 
@@ -38,30 +71,40 @@ describe('ProjectConfigService', () => {
       limit: 10,
       collectionIntervalMs: 10800000,
       trendCollectionEnabled: true,
-      topicWatchSchedulerEnabled: true,
+      kolRadarEnabled: true,
+      kolRadarCollectionIntervalMs: 21600000,
+      kolRadarAccounts: [
+        {
+          handle: 'OpenAI',
+          groupTag: 'AI / 产品',
+          joinedAt: '2026-08-26T06:33:01.015Z',
+          enabled: true,
+        },
+        {
+          handle: 'AnthropicAI',
+          groupTag: 'AI / 产品',
+          joinedAt: '2026-08-26T06:33:01.021Z',
+          enabled: true,
+        },
+        {
+          handle: 'GoogleDeepMind',
+          groupTag: 'AI / 研究',
+          joinedAt: '2026-08-26T06:33:01.024Z',
+          enabled: true,
+        },
+        {
+          handle: 'Polymarket',
+          groupTag: '预测市场',
+          joinedAt: '2026-08-26T06:33:01.077Z',
+          enabled: true,
+        },
+        {
+          handle: 'BLS_gov',
+          groupTag: '宏观数据',
+          joinedAt: '2026-08-26T06:33:01.062Z',
+          enabled: true,
+        },
+      ],
     });
-  });
-
-  it('returns stored scheduler switches with X trend collection config', async () => {
-    const repository = {
-      findByKey: jest.fn((key: string) => {
-        if (key === 'x.trends.collectionEnabled') {
-          return { key, value: false };
-        }
-        if (key === 'topicWatch.schedulerEnabled') {
-          return { key, value: false };
-        }
-        return null;
-      }),
-      upsert: jest.fn(),
-    } as unknown as ProjectConfigRepository;
-    const service = new ProjectConfigService(repository);
-
-    await expect(service.getXTrendCollectionConfig()).resolves.toEqual(
-      expect.objectContaining({
-        trendCollectionEnabled: false,
-        topicWatchSchedulerEnabled: false,
-      }),
-    );
   });
 });

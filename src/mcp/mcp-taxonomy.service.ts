@@ -37,7 +37,7 @@ export class McpTaxonomyService {
       ],
       sourceAndHeatLabels: [
         { name: 'X Trend', description: '由 X 热搜榜信号触发或包含 X 热搜证据。' },
-        { name: 'Topic Circle', description: '由重点主题追踪或圈层账号帖子触发。' },
+        { name: 'Account Stream', description: '由账号帖流或账号聚合信号触发。' },
         { name: 'Future Event', description: '由未来事件源或日程类信号触发。' },
         { name: 'Top5', description: '进入 X 输入榜单前 5 位或规则包中定义的高排名阈值。' },
         { name: 'Fast Rising', description: '相邻快照中排名快速上升。' },

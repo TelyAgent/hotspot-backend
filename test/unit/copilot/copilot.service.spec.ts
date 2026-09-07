@@ -12,19 +12,18 @@ describe('CopilotService', () => {
           runId: 'agent_run_1',
           status: 'succeeded',
           result: {
-            message: '准备添加 @Jason，请确认。',
+            message: '准备更新热榜配置，请确认。',
             proposedActions: [
               {
-                tool: 'add_twitter_topic_account',
-                summary: '给预测市场行业添加监控账号 @Jason',
+                tool: 'update_twitter_config',
+                summary: '将 X 热榜条数调整为 20',
                 arguments: {
-                  topicName: '预测市场行业',
-                  handle: 'Jason',
+                  limit: 20,
                 },
                 requiresConfirmation: true,
               },
             ],
-            usedTools: ['topicWatch.list'],
+            usedTools: ['projectConfig.getXTrendConfig'],
             missingData: [],
             suggestedNextSteps: [],
           },
@@ -53,15 +52,15 @@ describe('CopilotService', () => {
       data: expect.objectContaining({
         sessionId: 'session_1',
         agentRunId: 'agent_run_1',
-        tool: 'add_twitter_topic_account',
-        summary: '给预测市场行业添加监控账号 @Jason',
+        tool: 'update_twitter_config',
+        summary: '将 X 热榜条数调整为 20',
         status: 'pending',
       }),
     });
     expect(response.proposedActions).toEqual([
       expect.objectContaining({
         id: 'action_1',
-        tool: 'add_twitter_topic_account',
+        tool: 'update_twitter_config',
         status: 'pending',
       }),
     ]);
@@ -72,8 +71,8 @@ describe('CopilotService', () => {
     const assistantService = {
       executeTool: jest.fn(() =>
         Promise.resolve({
-          message: '已添加重点主题监控账号。',
-          result: [{ handle: 'jason' }],
+          message: '已更新 X/Twitter 热榜配置。',
+          result: { limit: 20 },
         }),
       ),
     } as unknown as AssistantService;
@@ -88,10 +87,9 @@ describe('CopilotService', () => {
     });
 
     expect(assistantService.executeTool).toHaveBeenCalledWith({
-      tool: 'add_twitter_topic_account',
+      tool: 'update_twitter_config',
       arguments: {
-        topicName: '预测市场行业',
-        handle: 'Jason',
+        limit: 20,
       },
     });
     expect(prisma.copilotAuditLog.create).toHaveBeenCalledWith({
@@ -99,11 +97,11 @@ describe('CopilotService', () => {
         tenantId: 'tenant_1',
         userId: 'user_1',
         actionId: 'action_1',
-        tool: 'add_twitter_topic_account',
+        tool: 'update_twitter_config',
         operation: 'confirm_action',
       }),
     });
-    expect(response.message).toBe('已添加重点主题监控账号。');
+    expect(response.message).toBe('已更新 X/Twitter 热榜配置。');
   });
 });
 
@@ -131,11 +129,10 @@ function createPrismaMock(): PrismaService {
           sessionId: 'session_1',
           tenantId: 'tenant_1',
           userId: 'user_1',
-          tool: 'add_twitter_topic_account',
-          summary: '给预测市场行业添加监控账号 @Jason',
+          tool: 'update_twitter_config',
+          summary: '将 X 热榜条数调整为 20',
           arguments: {
-            topicName: '预测市场行业',
-            handle: 'Jason',
+            limit: 20,
           },
           status: 'pending',
           requiresConfirmation: true,
@@ -148,11 +145,10 @@ function createPrismaMock(): PrismaService {
           sessionId: 'session_1',
           tenantId: 'tenant_1',
           userId: 'user_1',
-          tool: 'add_twitter_topic_account',
-          summary: '给预测市场行业添加监控账号 @Jason',
+          tool: 'update_twitter_config',
+          summary: '将 X 热榜条数调整为 20',
           arguments: {
-            topicName: '预测市场行业',
-            handle: 'Jason',
+            limit: 20,
           },
           status: 'pending',
           requiresConfirmation: true,

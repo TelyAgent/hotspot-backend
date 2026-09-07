@@ -10,10 +10,6 @@ export interface AssistantChatContext {
 export type AssistantToolName =
   | 'get_twitter_config'
   | 'update_twitter_config'
-  | 'list_twitter_topics'
-  | 'upsert_twitter_topic'
-  | 'add_twitter_topic_account'
-  | 'remove_twitter_topic_account'
   | 'set_twitter_trend_schedule';
 
 export interface AssistantProposedAction {

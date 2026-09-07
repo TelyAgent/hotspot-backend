@@ -24,11 +24,6 @@ describe('CoreAgentToolsService', () => {
       'opportunity.getById',
       'event.findSimilar',
       'event.getById',
-      'topicWatch.list',
-      'topicWatch.listActive',
-      'topicWatch.get',
-      'topicWatch.getCandidates',
-      'topicWatch.getAuthorPostPerformance',
       'tasks.findSimilar',
     ]);
   });
@@ -338,111 +333,6 @@ describe('CoreAgentToolsService', () => {
     });
   });
 
-  it('executes topicWatch.listActive against prisma', async () => {
-    const registry = new ToolRegistryService();
-    const prisma = {
-      topicWatch: {
-        findMany: jest.fn(() =>
-          Promise.resolve([
-            {
-              id: 'topic-ai',
-              name: 'AI 与科技',
-              description: 'AI 行业重点主题',
-              domains: ['ai'],
-              watchIntent: '追踪 AI 行业机会',
-              triggerPolicy: 'AI 模型、芯片、监管',
-              status: 'active',
-            },
-          ]),
-        ),
-      },
-    } as unknown as PrismaService;
-    const service = createService(registry, prisma);
-
-    service.onModuleInit();
-    const output = await registry.get('topicWatch.listActive').execute({
-      take: 5,
-    });
-
-    expect(prisma.topicWatch.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          status: 'active',
-        },
-        take: 5,
-      }),
-    );
-    expect(output).toEqual({
-      items: [
-        expect.objectContaining({
-          id: 'topic-ai',
-          name: 'AI 与科技',
-        }),
-      ],
-    });
-  });
-
-  it('executes topicWatch.getAuthorPostPerformance against prisma', async () => {
-    const registry = new ToolRegistryService();
-    const prisma = {
-      signal: {
-        findMany: jest.fn(() =>
-          Promise.resolve([
-            {
-              id: 'sig_target',
-              metadata: {
-                postId: 'post_target',
-                authorHandle: 'OpenAI',
-              },
-              metrics: {
-                likes: 95,
-                reposts: 5,
-              },
-              observedAt: new Date('2026-08-24T10:00:00.000Z'),
-            },
-            {
-              id: 'sig_other',
-              metadata: {
-                postId: 'post_other',
-                authorHandle: 'OpenAI',
-              },
-              metrics: {
-                likes: 10,
-              },
-              observedAt: new Date('2026-08-23T10:00:00.000Z'),
-            },
-          ]),
-        ),
-      },
-    } as unknown as PrismaService;
-    const service = createService(registry, prisma);
-
-    service.onModuleInit();
-    const output = await registry.get('topicWatch.getAuthorPostPerformance').execute({
-      authorHandle: 'OpenAI',
-      postId: 'post_target',
-      lookbackDays: 30,
-    });
-
-    expect(prisma.signal.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          platform: 'x',
-          signalType: 'x_post',
-        }),
-      }),
-    );
-    expect(output).toEqual(
-      expect.objectContaining({
-        authorHandle: 'OpenAI',
-        postId: 'post_target',
-        targetScore: 100,
-        sampleSize: 2,
-        percentile: 100,
-        isTop5Percent: true,
-      }),
-    );
-  });
 });
 
 function createService(
@@ -455,7 +345,6 @@ function createService(
         limit: 30,
         collectionIntervalMs: 10800000,
         trendCollectionEnabled: true,
-        topicWatchSchedulerEnabled: true,
       }),
     ),
   } as unknown as ProjectConfigService,

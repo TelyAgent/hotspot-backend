@@ -18,8 +18,10 @@ const DEFAULT_TICK_MS = 60 * 1000;
 export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DataSourceSchedulerService.name);
   private timer?: NodeJS.Timeout;
-  private running = false;
-  private lastStartedAt?: number;
+  private runningTrends = false;
+  private runningKolRadar = false;
+  private lastTrendsStartedAt?: number;
+  private lastKolRadarStartedAt?: number;
 
   constructor(
     private readonly configService: ConfigService,
@@ -47,14 +49,13 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
   }
 
   private async tick() {
-    if (this.running) {
-      return;
-    }
-
-    await this.runDueCollection(new Date());
+    await Promise.all([
+      this.runDueTrendCollection(new Date()),
+      this.runDueKolRadarCollection(new Date()),
+    ]);
   }
 
-  async runDueCollection(nowDate: Date) {
+  async runDueTrendCollection(nowDate: Date) {
     const now = nowDate.getTime();
     const collectionConfig =
       await this.projectConfigService.getXTrendCollectionConfig();
@@ -64,7 +65,11 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
 
     const intervalMs = collectionConfig.collectionIntervalMs;
 
-    if (this.lastStartedAt && now - this.lastStartedAt < intervalMs) {
+    if (this.runningTrends) {
+      return;
+    }
+
+    if (this.lastTrendsStartedAt && now - this.lastTrendsStartedAt < intervalMs) {
       return;
     }
 
@@ -73,12 +78,12 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
       statuses: ['running', 'succeeded'],
     });
     if (latestRun && now - latestRun.startedAt.getTime() < intervalMs) {
-      this.lastStartedAt = latestRun.startedAt.getTime();
+      this.lastTrendsStartedAt = latestRun.startedAt.getTime();
       return;
     }
 
-    this.running = true;
-    this.lastStartedAt = now;
+    this.runningTrends = true;
+    this.lastTrendsStartedAt = now;
 
     try {
       const run = await this.runner.run({
@@ -102,7 +107,75 @@ export class DataSourceSchedulerService implements OnModuleInit, OnModuleDestroy
         }`,
       );
     } finally {
-      this.running = false;
+      this.runningTrends = false;
+    }
+  }
+
+  async runDueKolRadarCollection(nowDate: Date) {
+    const now = nowDate.getTime();
+    const collectionConfig =
+      await this.projectConfigService.getXTrendCollectionConfig();
+    if (!collectionConfig.kolRadarEnabled) {
+      return;
+    }
+
+    const handles = collectionConfig.kolRadarAccounts
+      .filter((account) => account.enabled)
+      .map((account) => account.handle)
+      .filter(Boolean);
+
+    if (handles.length === 0) {
+      return;
+    }
+
+    const intervalMs = collectionConfig.kolRadarCollectionIntervalMs;
+
+    if (this.runningKolRadar) {
+      return;
+    }
+
+    if (this.lastKolRadarStartedAt && now - this.lastKolRadarStartedAt < intervalMs) {
+      return;
+    }
+
+    const latestRun = (
+      await this.collectionRunRepository.findByJobIdPrefix({
+        jobIdPrefix: 'x-kol-radar-',
+        take: 1,
+      })
+    )[0];
+    if (latestRun && now - latestRun.startedAt.getTime() < intervalMs) {
+      this.lastKolRadarStartedAt = latestRun.startedAt.getTime();
+      return;
+    }
+
+    this.runningKolRadar = true;
+    this.lastKolRadarStartedAt = now;
+
+    try {
+      const run = await this.runner.run({
+        id: 'x-kol-radar-default',
+        pluginId: 'x-account-posts',
+        capabilityId: 'x.account.posts',
+        params: {
+          handles,
+          includeReplies: true,
+          includeQuotes: true,
+          includeReposts: false,
+        },
+        observedAt: nowDate,
+      });
+      this.logger.log(
+        `KOL radar scheduled collection finished, run=${run.id}, status=${run.status}, rawItemCount=${run.rawItemCount}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `KOL radar scheduled collection crashed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    } finally {
+      this.runningKolRadar = false;
     }
   }
 }

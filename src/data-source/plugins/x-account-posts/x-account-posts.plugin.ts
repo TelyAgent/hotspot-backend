@@ -95,6 +95,13 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
             type: 'string',
             description: 'X/Twitter 账号 handle，可带 @。',
           },
+          handles: {
+            type: 'array',
+            description: '多个 X/Twitter 账号 handle；存在时优先于单个 handle。',
+            items: {
+              type: 'string',
+            },
+          },
           topicWatchId: {
             type: 'string',
             description: '来源重点主题 ID，用于后续聚合归属。',
@@ -150,7 +157,7 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
       );
     }
 
-    const handle = normalizeHandle(getRequiredString(input.params.handle, 'handle'));
+    const handles = resolveHandles(input.params);
     const baseUrl = (
       this.configService.get<string>('TWITTERAPI_BASE_URL') ?? DEFAULT_BASE_URL
     ).replace(/\/$/, '');
@@ -166,45 +173,55 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
     const includeQuotes = getBoolean(input.params.includeQuotes, true);
     const includeReposts = getBoolean(input.params.includeReposts, false);
     const topicWatchId = getString(input.params.topicWatchId);
-
-    const user = await this.fetchUserInfo({ handle, baseUrl, apiKey, fetcher });
     const posts: XAccountPostPayload[] = [];
-    let cursor = '';
+    const handleSummaries: Array<{
+      handle: string;
+      count: number;
+      nextCursor: string | null;
+      error?: string;
+    }> = [];
 
-    for (let page = 0; page < maxPages; page += 1) {
-      const timeline = await this.fetchTimelinePage({
-        userId: user.id,
-        cursor,
-        includeReplies,
-        baseUrl,
-        apiKey,
-        fetcher,
-      });
-      const tweets = extractTweets(timeline);
-      if (tweets.length === 0) break;
-
-      let reachedOlderPost = false;
-      for (const tweet of tweets) {
-        const publishedAt = tweet.createdAt
-          ? new Date(tweet.createdAt).getTime()
-          : input.context.observedAt.getTime();
-        if (publishedAt > untilTime) continue;
-        if (publishedAt < sinceTime) {
-          reachedOlderPost = true;
-          continue;
-        }
-
-        const post = mapTimelineTweet(tweet, handle, input.context.observedAt);
-        if (!includeReposts && post.postType === 'repost') continue;
-        if (!includeQuotes && post.postType === 'quote') continue;
-        if (!post.text.trim()) continue;
-        posts.push(post);
+    for (const handle of handles) {
+      try {
+        const result = await this.collectForHandle({
+          handle,
+          baseUrl,
+          apiKey,
+          fetcher,
+          observedAt: input.context.observedAt,
+          sinceTime,
+          untilTime,
+          maxPages,
+          includeReplies,
+          includeQuotes,
+          includeReposts,
+        });
+        posts.push(...result.posts);
+        handleSummaries.push({
+          handle,
+          count: result.posts.length,
+          nextCursor: result.nextCursor || null,
+        });
+      } catch (error) {
+        handleSummaries.push({
+          handle,
+          count: 0,
+          nextCursor: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
+    }
 
-      if (reachedOlderPost || !timeline.has_next_page || !timeline.next_cursor) {
-        break;
-      }
-      cursor = timeline.next_cursor;
+    if (posts.length === 0) {
+      const messages = handleSummaries
+        .map((item) => `${item.handle}${item.error ? `: ${item.error}` : ''}`)
+        .join('; ');
+      throw new DomainError(
+        messages
+          ? `x.account.posts failed for all requested handles: ${messages}`
+          : 'x.account.posts returned no posts.',
+        'X_ACCOUNT_POSTS_REQUEST_FAILED',
+      );
     }
 
     return {
@@ -217,17 +234,17 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
         metadata: {
           pluginId: this.id,
           capabilityId: input.capabilityId,
-          handle,
+          handle: post.authorHandle,
           topicWatchId: topicWatchId ?? null,
           collectedAt,
         },
       })),
       summary: {
-        handle,
+        handles,
         topicWatchId: topicWatchId ?? null,
         collectedAt,
         count: posts.length,
-        nextCursor: cursor || null,
+        handleSummaries,
       },
     };
   }
@@ -288,6 +305,71 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
           },
         },
       ],
+    };
+  }
+
+  private async collectForHandle(input: {
+    handle: string;
+    baseUrl: string;
+    apiKey: string;
+    fetcher: Fetcher;
+    observedAt: Date;
+    sinceTime: number;
+    untilTime: number;
+    maxPages: number;
+    includeReplies: boolean;
+    includeQuotes: boolean;
+    includeReposts: boolean;
+  }): Promise<{ posts: XAccountPostPayload[]; nextCursor: string }> {
+    const user = await this.fetchUserInfo({
+      handle: input.handle,
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      fetcher: input.fetcher,
+    });
+
+    const posts: XAccountPostPayload[] = [];
+    let cursor = '';
+
+    for (let page = 0; page < input.maxPages; page += 1) {
+      const timeline = await this.fetchTimelinePage({
+        userId: user.id,
+        cursor,
+        includeReplies: input.includeReplies,
+        baseUrl: input.baseUrl,
+        apiKey: input.apiKey,
+        fetcher: input.fetcher,
+      });
+      const tweets = extractTweets(timeline);
+      if (tweets.length === 0) break;
+
+      let reachedOlderPost = false;
+      for (const tweet of tweets) {
+        const publishedAt = tweet.createdAt
+          ? new Date(tweet.createdAt).getTime()
+          : input.observedAt.getTime();
+        if (publishedAt > input.untilTime) continue;
+        if (publishedAt < input.sinceTime) {
+          reachedOlderPost = true;
+          continue;
+        }
+
+        const post = mapTimelineTweet(tweet, input.handle, input.observedAt);
+        if (!input.includeReposts && post.postType === 'repost') continue;
+        if (!input.includeQuotes && post.postType === 'quote') continue;
+        if (!post.text.trim()) continue;
+        posts.push(post);
+      }
+
+      if (reachedOlderPost || !timeline.has_next_page || !timeline.next_cursor) {
+        break;
+      }
+      cursor = timeline.next_cursor;
+    }
+
+    return {
+      posts,
+      nextCursor: cursor,
     };
   }
 
@@ -415,6 +497,21 @@ function getRequiredString(value: unknown, key: string) {
     throw new DomainError(`${key} is required.`, 'INVALID_DATA_SOURCE_PARAMS');
   }
   return text;
+}
+
+function resolveHandles(params: Record<string, unknown>) {
+  const handles = Array.isArray(params.handles)
+    ? params.handles
+        .filter((item): item is string => typeof item === 'string')
+        .map((handle) => normalizeHandle(handle))
+        .filter(Boolean)
+    : [];
+
+  if (handles.length > 0) {
+    return Array.from(new Set(handles));
+  }
+
+  return [normalizeHandle(getRequiredString(params.handle, 'handle'))];
 }
 
 function getString(value: unknown) {

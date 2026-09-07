@@ -8,9 +8,10 @@ import { SignalController } from './signal.controller';
 import { SignalRepository } from './signal/signal.repository';
 import { SignalService } from './signal/signal.service';
 import { SignalEvidenceEnrichmentModule } from './enrichment/signal-evidence-enrichment.module';
+import { ProjectConfigModule } from '../project-config/project-config.module';
 
 @Module({
-  imports: [PrismaModule, SignalEvidenceEnrichmentModule],
+  imports: [PrismaModule, SignalEvidenceEnrichmentModule, ProjectConfigModule],
   controllers: [SignalController],
   providers: [
     RawItemRepository,

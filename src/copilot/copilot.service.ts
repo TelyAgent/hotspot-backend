@@ -317,7 +317,7 @@ export class CopilotService {
         type: 'config_read',
         guidance:
           '优先调用配置类工具回答。X/Twitter 热榜采集地区、条数、频率必须调用 projectConfig.getXTrendConfig。',
-        preferredTools: ['projectConfig.getXTrendConfig', 'topicWatch.list', 'topicWatch.get'],
+        preferredTools: ['projectConfig.getXTrendConfig'],
       };
     }
     return {
@@ -330,10 +330,6 @@ export class CopilotService {
     if (
       tool === 'get_twitter_config' ||
       tool === 'update_twitter_config' ||
-      tool === 'list_twitter_topics' ||
-      tool === 'upsert_twitter_topic' ||
-      tool === 'add_twitter_topic_account' ||
-      tool === 'remove_twitter_topic_account' ||
       tool === 'set_twitter_trend_schedule'
     ) {
       return tool;

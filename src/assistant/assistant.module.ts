@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AgentModule } from '../agent/agent.module';
 import { ProjectConfigModule } from '../project-config/project-config.module';
-import { TopicWatchModule } from '../topic-watch/topic-watch.module';
 import { AssistantController } from './assistant.controller';
 import { AssistantService } from './assistant.service';
 
 @Module({
-  imports: [AgentModule, ProjectConfigModule, TopicWatchModule],
+  imports: [AgentModule, ProjectConfigModule],
   controllers: [AssistantController],
   providers: [AssistantService],
   exports: [AssistantService],
