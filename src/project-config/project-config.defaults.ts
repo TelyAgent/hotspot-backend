@@ -7,6 +7,7 @@ export const DEFAULT_X_TREND_COLLECTION_CONFIG: XTrendCollectionConfig = {
   trendCollectionEnabled: true,
   kolRadarEnabled: true,
   kolRadarCollectionIntervalMs: 6 * 60 * 60 * 1000,
+  kolRadarMinViews: 10000,
   kolRadarAccounts: [
     { handle: 'Reuters', groupTag: '政治与选举', joinedAt: '2026-08-26T06:33:01.001Z', enabled: true },
     { handle: 'AP', groupTag: '政治与选举', joinedAt: '2026-08-26T06:33:01.002Z', enabled: true },
@@ -68,5 +69,6 @@ export const PROJECT_CONFIG_DESCRIPTIONS: Record<string, string> = {
   'x.trends.collectionEnabled': '是否启用 X 热榜自动采集。',
   'x.trends.kolRadarEnabled': '是否启用 KOL 人驱动热点雷达。',
   'x.trends.kolRadarCollectionIntervalMs': 'KOL 热点雷达自动采集间隔，单位毫秒。',
+  'x.trends.kolRadarMinViews': 'KOL 热点雷达入榜的最低 views 门槛。',
   'x.trends.kolAccounts': 'KOL 热点雷达账号列表。',
 };

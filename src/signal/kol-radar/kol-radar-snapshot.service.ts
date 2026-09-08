@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { ProjectConfigService } from '../../project-config/project-config.service';
 
 type KolRadarSourceRow = {
   handle: string;
@@ -42,7 +43,10 @@ type SavedSignalWithRawItemLike = SavedSignalLike & {
 export class KolRadarSnapshotService implements OnModuleInit {
   private readonly logger = new Logger(KolRadarSnapshotService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectConfigService: ProjectConfigService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.ensureLatestSnapshot().catch((error) => {
@@ -114,13 +118,12 @@ export class KolRadarSnapshotService implements OnModuleInit {
     observedAt: Date;
     items: Array<{ rawItem: SavedRawItemLike; signal: SavedSignalLike }>;
   }): Promise<void> {
-    const rows = input.items.map(({ rawItem, signal }) =>
-      this.toSourceRowFromSavedSignal({ rawItem, signal }),
-    );
-
-    if (rows.length === 0) {
-      return;
-    }
+    const config = await this.projectConfigService.getXTrendCollectionConfig();
+    const minViews = config.kolRadarMinViews;
+    const candidateCount = input.items.length;
+    const rows = input.items
+      .map(({ rawItem, signal }) => this.toSourceRowFromSavedSignal({ rawItem, signal }))
+      .filter((row) => getMetricNumber(row.metrics, 'views', 'viewCount') >= minViews);
 
     await this.persistSnapshot({
       collectionRunId: input.collectionRunId,
@@ -129,14 +132,19 @@ export class KolRadarSnapshotService implements OnModuleInit {
       metadata: {
         source: 'x-account-posts',
         collectionRunId: input.collectionRunId,
-        rawItemCount: rows.length,
+        rawItemCount: candidateCount,
+        qualifiedItemCount: rows.length,
         groupedHandleCount: new Set(rows.map((row) => normalizeHandle(row.handle))).size,
         windowHours: 6,
+        minViews,
       },
     });
   }
 
   private async ensureLatestSnapshot(): Promise<void> {
+    const currentConfig = await this.projectConfigService.getXTrendCollectionConfig();
+    const minViews = currentConfig.kolRadarMinViews;
+
     const latestRun = await this.prisma.collectionRun.findFirst({
       where: {
         jobId: {
@@ -164,10 +172,11 @@ export class KolRadarSnapshotService implements OnModuleInit {
       },
       select: {
         id: true,
+        metadata: true,
       },
     });
 
-    if (existing) {
+    if (existing && readNumberFromJson(existing.metadata, 'minViews') === minViews) {
       return;
     }
 
@@ -194,33 +203,30 @@ export class KolRadarSnapshotService implements OnModuleInit {
       ],
     })) as SavedSignalWithRawItemLike[];
 
-    if (signals.length === 0) {
-      return;
-    }
+    const candidateRows = signals.map((signal) =>
+      this.toSourceRowFromSavedSignal({
+        rawItem: signal.rawItem,
+        signal,
+      }),
+    );
+    const rows = candidateRows.filter(
+      (row) => getMetricNumber(row.metrics, 'views', 'viewCount') >= minViews,
+    );
 
     await this.persistSnapshot({
       collectionRunId: latestRun.id,
       observedAt,
-      rows: signals.map((signal) =>
-        this.toSourceRowFromSavedSignal({
-          rawItem: signal.rawItem,
-          signal,
-        }),
-      ),
+      rows,
       metadata: {
         source: 'backfill',
         collectionRunId: latestRun.id,
         rawItemCount: signals.length,
+        qualifiedItemCount: rows.length,
         groupedHandleCount: new Set(
-          signals.map((signal) =>
-            normalizeHandle(
-              getString(jsonObjectValue(signal.metadata, 'authorHandle')) ??
-                getString(signal.title.split(/[：:]/)[0]) ??
-                'unknown',
-            ),
-          ),
+          candidateRows.map((row) => normalizeHandle(row.handle)),
         ).size,
         windowHours: 6,
+        minViews,
       },
     });
     this.logger.log(`Backfilled latest KOL radar snapshot for run ${latestRun.id}`);

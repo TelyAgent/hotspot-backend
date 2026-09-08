@@ -35,6 +35,7 @@ export class ProjectConfigService implements OnModuleInit {
       'x.trends.kolRadarCollectionIntervalMs',
       defaults.kolRadarCollectionIntervalMs,
     );
+    await this.seedDefault('x.trends.kolRadarMinViews', defaults.kolRadarMinViews);
     await this.seedDefault(
       'x.trends.kolAccounts',
       defaults.kolRadarAccounts,
@@ -51,6 +52,7 @@ export class ProjectConfigService implements OnModuleInit {
       trendCollectionEnabledConfig,
       kolRadarEnabledConfig,
       kolRadarIntervalConfig,
+      kolRadarMinViewsConfig,
       kolAccountsConfig,
     ] = await Promise.all([
       this.repository.findByKey('x.trends.regions'),
@@ -59,6 +61,7 @@ export class ProjectConfigService implements OnModuleInit {
       this.repository.findByKey('x.trends.collectionEnabled'),
       this.repository.findByKey('x.trends.kolRadarEnabled'),
       this.repository.findByKey('x.trends.kolRadarCollectionIntervalMs'),
+      this.repository.findByKey('x.trends.kolRadarMinViews'),
       this.repository.findByKey('x.trends.kolAccounts'),
     ]);
 
@@ -80,6 +83,10 @@ export class ProjectConfigService implements OnModuleInit {
       kolRadarCollectionIntervalMs: normalizePositiveNumber(
         kolRadarIntervalConfig?.value,
         defaults.kolRadarCollectionIntervalMs,
+      ),
+      kolRadarMinViews: normalizePositiveNumber(
+        kolRadarMinViewsConfig?.value,
+        defaults.kolRadarMinViews,
       ),
       kolRadarAccounts: normalizeKolAccounts(
         kolAccountsConfig?.value,
@@ -152,6 +159,18 @@ export class ProjectConfigService implements OnModuleInit {
         ),
         description:
           PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolRadarCollectionIntervalMs'],
+        updatedBy,
+      });
+    }
+
+    if (typeof patch.kolRadarMinViews === 'number') {
+      await this.repository.upsert({
+        key: 'x.trends.kolRadarMinViews',
+        value: normalizePositiveNumber(
+          patch.kolRadarMinViews,
+          DEFAULT_X_TREND_COLLECTION_CONFIG.kolRadarMinViews,
+        ),
+        description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolRadarMinViews'],
         updatedBy,
       });
     }

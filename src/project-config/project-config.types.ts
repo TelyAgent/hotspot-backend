@@ -23,5 +23,6 @@ export interface XTrendCollectionConfig {
   trendCollectionEnabled: boolean;
   kolRadarEnabled: boolean;
   kolRadarCollectionIntervalMs: number;
+  kolRadarMinViews: number;
   kolRadarAccounts: KolRadarAccountConfig[];
 }

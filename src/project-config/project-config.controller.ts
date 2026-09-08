@@ -40,6 +40,10 @@ export class ProjectConfigController {
           typeof body.kolRadarCollectionIntervalMs === 'number'
             ? body.kolRadarCollectionIntervalMs
             : undefined,
+        kolRadarMinViews:
+          typeof body.kolRadarMinViews === 'number'
+            ? body.kolRadarMinViews
+            : undefined,
         kolRadarAccounts: Array.isArray(body.kolRadarAccounts)
           ? body.kolRadarAccounts.map((item) => ({
               handle: String(item?.handle ?? ''),
