@@ -121,6 +121,7 @@ model CollectionRun {
   @@map("collection_runs")
 
   xTrendSnapshots XTrendSnapshot[]
+  kolRadarSnapshots KolRadarSnapshot[]
 }
 
 model XTrendSnapshot {
@@ -183,6 +184,48 @@ model XTrendSnapshotDiff {
   @@index([region, observedAt])
   @@index([query, observedAt])
   @@map("x_trend_snapshot_diffs")
+}
+
+model KolRadarSnapshot {
+  id              String   @id @default(cuid())
+  collectionRunId String   @unique
+  observedAt      DateTime
+  itemCount       Int      @default(0)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  collectionRun CollectionRun @relation(fields: [collectionRunId], references: [id], onDelete: Cascade)
+  items         KolRadarSnapshotItem[]
+
+  @@index([observedAt])
+  @@map("kol_radar_snapshots")
+}
+
+model KolRadarSnapshotItem {
+  id           String   @id @default(cuid())
+  snapshotId   String
+  rank         Int
+  handle       String
+  authorName   String?
+  title        String
+  summary      String
+  observedAt   DateTime
+  publishedAt  String?
+  postType     String?
+  url          String?
+  metrics      Json?
+  signalId     String?
+  rawItemId    String?
+  sourceItemId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  snapshot KolRadarSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, handle])
+  @@index([handle, rank])
+  @@map("kol_radar_snapshot_items")
 }
 
 model ProjectConfig {

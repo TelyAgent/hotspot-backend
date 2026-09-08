@@ -2,9 +2,12 @@ import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { OpportunityMiningSchedulerService } from '../../opportunity/mining/opportunity-mining-scheduler.service';
 import { XTrendSnapshotService } from '../plugins/x-trends/x-trend-snapshot.service';
+import { KolRadarSnapshotService } from '../../signal/kol-radar/kol-radar-snapshot.service';
 import { EvidenceService } from '../../signal/evidence/evidence.service';
 import { RawItemService } from '../../signal/raw-item/raw-item.service';
 import { SignalService } from '../../signal/signal/signal.service';
+import { RawItem } from '../../signal/raw-item/raw-item.types';
+import { Signal } from '../../signal/signal/signal.types';
 import { DataSourcePluginRegistry } from '../registry/data-source-plugin.registry';
 import {
   CollectionJobConfig,
@@ -20,6 +23,8 @@ export class CollectionRunnerService {
     private readonly rawItemService: RawItemService,
     private readonly signalService: SignalService,
     private readonly evidenceService: EvidenceService,
+    @Optional()
+    private readonly kolRadarSnapshotService?: KolRadarSnapshotService,
     @Optional()
     private readonly xTrendSnapshotService?: XTrendSnapshotService,
     @Optional()
@@ -48,6 +53,7 @@ export class CollectionRunnerService {
 
       let signalCount = 0;
       let evidenceCount = 0;
+      const savedSignals: Array<{ rawItem: RawItem; signal: Signal }> = [];
 
       const context = {
         jobId: jobConfig.id,
@@ -75,6 +81,10 @@ export class CollectionRunnerService {
           rawItem: savedRawItem,
           ...normalized.signal,
         });
+        savedSignals.push({
+          rawItem: savedRawItem,
+          signal,
+        });
         signalCount += 1;
 
         for (const evidence of normalized.evidence ?? []) {
@@ -91,6 +101,17 @@ export class CollectionRunnerService {
           collectionRunId: run.id,
           observedAt,
           rawItems: result.rawItems,
+        });
+      }
+
+      if (
+        jobConfig.pluginId === 'x-account-posts' &&
+        jobConfig.id.startsWith('x-kol-radar-')
+      ) {
+        await this.kolRadarSnapshotService?.createSnapshotsForCollection({
+          collectionRunId: run.id,
+          observedAt,
+          items: savedSignals,
         });
       }
 

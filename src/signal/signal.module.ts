@@ -4,6 +4,7 @@ import { EvidenceRepository } from './evidence/evidence.repository';
 import { EvidenceService } from './evidence/evidence.service';
 import { RawItemRepository } from './raw-item/raw-item.repository';
 import { RawItemService } from './raw-item/raw-item.service';
+import { KolRadarSnapshotService } from './kol-radar/kol-radar-snapshot.service';
 import { SignalController } from './signal.controller';
 import { SignalRepository } from './signal/signal.repository';
 import { SignalService } from './signal/signal.service';
@@ -16,6 +17,7 @@ import { ProjectConfigModule } from '../project-config/project-config.module';
   providers: [
     RawItemRepository,
     RawItemService,
+    KolRadarSnapshotService,
     SignalRepository,
     SignalService,
     EvidenceRepository,
@@ -23,6 +25,7 @@ import { ProjectConfigModule } from '../project-config/project-config.module';
   ],
   exports: [
     RawItemService,
+    KolRadarSnapshotService,
     SignalService,
     SignalRepository,
     EvidenceService,
