@@ -239,6 +239,52 @@ model ProjectConfig {
   @@map("project_configs")
 }
 
+model AccountProfile {
+  handle            String    @id
+  displayHandle     String?
+  displayName       String?
+  twitterUserId     String?   @unique
+  followers         Int?
+  region            String?
+  regionSource      String?
+  bio               String?
+  accountType       String?
+  accountTypeSource String?
+
+  monitorEnabled    Boolean   @default(false)
+  groupTag          String?
+  joinedAt          DateTime  @default(now())
+  source            String    @default("discovered")
+
+  weeklyPosts       Int       @default(0)
+  avgComments       Float?
+  avgReposts        Float?
+  avgViews          Float?
+  avgLikes          Float?
+  lastActiveAt      DateTime?
+
+  isActive          Boolean   @default(true)
+  lastFetchedAt     DateTime?
+  lastAggregatedAt  DateTime?
+  refreshAttemptCount Int     @default(0)
+  nextRetryAt       DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([monitorEnabled])
+  @@index([isActive, lastFetchedAt])
+  @@index([isActive, nextRetryAt])
+  @@map("account_profiles")
+}
+
+model AccountProfileTombstone {
+  handle    String   @id
+  deletedAt DateTime @default(now())
+
+  @@map("account_profile_tombstones")
+}
+
 model AgentRun {
   id          String    @id @default(cuid())
   agentType   String

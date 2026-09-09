@@ -16,38 +16,7 @@ describe('ProjectConfigService', () => {
       trendCollectionEnabled: true,
       kolRadarEnabled: true,
       kolRadarCollectionIntervalMs: 21600000,
-      kolRadarAccounts: [
-        {
-          handle: 'OpenAI',
-          groupTag: 'AI / 产品',
-          joinedAt: '2026-08-26T06:33:01.015Z',
-          enabled: true,
-        },
-        {
-          handle: 'AnthropicAI',
-          groupTag: 'AI / 产品',
-          joinedAt: '2026-08-26T06:33:01.021Z',
-          enabled: true,
-        },
-        {
-          handle: 'GoogleDeepMind',
-          groupTag: 'AI / 研究',
-          joinedAt: '2026-08-26T06:33:01.024Z',
-          enabled: true,
-        },
-        {
-          handle: 'Polymarket',
-          groupTag: '预测市场',
-          joinedAt: '2026-08-26T06:33:01.077Z',
-          enabled: true,
-        },
-        {
-          handle: 'BLS_gov',
-          groupTag: '宏观数据',
-          joinedAt: '2026-08-26T06:33:01.062Z',
-          enabled: true,
-        },
-      ],
+      kolRadarMinViews: 10000,
     });
   });
 
@@ -73,38 +42,7 @@ describe('ProjectConfigService', () => {
       trendCollectionEnabled: true,
       kolRadarEnabled: true,
       kolRadarCollectionIntervalMs: 21600000,
-      kolRadarAccounts: [
-        {
-          handle: 'OpenAI',
-          groupTag: 'AI / 产品',
-          joinedAt: '2026-08-26T06:33:01.015Z',
-          enabled: true,
-        },
-        {
-          handle: 'AnthropicAI',
-          groupTag: 'AI / 产品',
-          joinedAt: '2026-08-26T06:33:01.021Z',
-          enabled: true,
-        },
-        {
-          handle: 'GoogleDeepMind',
-          groupTag: 'AI / 研究',
-          joinedAt: '2026-08-26T06:33:01.024Z',
-          enabled: true,
-        },
-        {
-          handle: 'Polymarket',
-          groupTag: '预测市场',
-          joinedAt: '2026-08-26T06:33:01.077Z',
-          enabled: true,
-        },
-        {
-          handle: 'BLS_gov',
-          groupTag: '宏观数据',
-          joinedAt: '2026-08-26T06:33:01.062Z',
-          enabled: true,
-        },
-      ],
+      kolRadarMinViews: 10000,
     });
   });
 });

@@ -14,6 +14,7 @@
     "db:seed": "ts-node prisma/seed.ts",
     "backfill:event-contexts": "ts-node scripts/backfill-event-source-contexts.ts",
     "events:archive-duplicates": "ts-node scripts/archive-duplicate-events-by-evidence.ts",
+    "init:account-pool": "ts-node scripts/init-account-pool.ts",
     "demo:agent": "ts-node scripts/demo-agent-run.ts",
     "demo:pipeline": "ts-node scripts/demo-pipeline.ts",
     "typecheck": "tsc --noEmit",

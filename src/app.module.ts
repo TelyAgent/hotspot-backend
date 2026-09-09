@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AccountProfileModule } from './account-profile/account-profile.module';
 import { AgentModule } from './agent/agent.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { AppController } from './app.controller';
@@ -28,6 +29,7 @@ import { YoutubeModule } from './youtube/youtube.module';
     SignalModule,
     DataSourceModule,
     ProjectConfigModule,
+    AccountProfileModule,
     AgentModule,
     AssistantModule,
     FutureEventModule,

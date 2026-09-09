@@ -44,15 +44,6 @@ export class ProjectConfigController {
           typeof body.kolRadarMinViews === 'number'
             ? body.kolRadarMinViews
             : undefined,
-        kolRadarAccounts: Array.isArray(body.kolRadarAccounts)
-          ? body.kolRadarAccounts.map((item) => ({
-              handle: String(item?.handle ?? ''),
-              groupTag:
-                typeof item?.groupTag === 'string' ? item.groupTag : null,
-              joinedAt: String(item?.joinedAt ?? ''),
-              enabled: Boolean(item?.enabled),
-            }))
-          : undefined,
       },
       'api',
     );

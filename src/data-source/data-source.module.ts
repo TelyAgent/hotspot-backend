@@ -1,3 +1,4 @@
+import { AccountProfileModule } from '../account-profile/account-profile.module';
 import { Module } from '@nestjs/common';
 import { OpportunityModule } from '../opportunity/opportunity.module';
 import { ProjectConfigModule } from '../project-config/project-config.module';
@@ -16,7 +17,7 @@ import { CollectionRunnerService } from './runner/collection-runner.service';
 import { DataSourceSchedulerService } from './scheduler/data-source-scheduler.service';
 
 @Module({
-  imports: [SignalModule, ProjectConfigModule, OpportunityModule],
+  imports: [SignalModule, ProjectConfigModule, AccountProfileModule, OpportunityModule],
   controllers: [DataSourceController],
   providers: [
     MockDataSourcePlugin,

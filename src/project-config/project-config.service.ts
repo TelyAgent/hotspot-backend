@@ -4,7 +4,7 @@ import {
   PROJECT_CONFIG_DESCRIPTIONS,
 } from './project-config.defaults';
 import { ProjectConfigRepository } from './project-config.repository';
-import { KolRadarAccountConfig, XTrendCollectionConfig } from './project-config.types';
+import { XTrendCollectionConfig } from './project-config.types';
 import { JsonValue } from '../common/types/json.type';
 
 @Injectable()
@@ -36,11 +36,6 @@ export class ProjectConfigService implements OnModuleInit {
       defaults.kolRadarCollectionIntervalMs,
     );
     await this.seedDefault('x.trends.kolRadarMinViews', defaults.kolRadarMinViews);
-    await this.seedDefault(
-      'x.trends.kolAccounts',
-      defaults.kolRadarAccounts,
-    );
-    await this.backfillKolAccounts(defaults.kolRadarAccounts);
   }
 
   async getXTrendCollectionConfig(): Promise<XTrendCollectionConfig> {
@@ -53,7 +48,6 @@ export class ProjectConfigService implements OnModuleInit {
       kolRadarEnabledConfig,
       kolRadarIntervalConfig,
       kolRadarMinViewsConfig,
-      kolAccountsConfig,
     ] = await Promise.all([
       this.repository.findByKey('x.trends.regions'),
       this.repository.findByKey('x.trends.limit'),
@@ -62,7 +56,6 @@ export class ProjectConfigService implements OnModuleInit {
       this.repository.findByKey('x.trends.kolRadarEnabled'),
       this.repository.findByKey('x.trends.kolRadarCollectionIntervalMs'),
       this.repository.findByKey('x.trends.kolRadarMinViews'),
-      this.repository.findByKey('x.trends.kolAccounts'),
     ]);
 
     return {
@@ -87,10 +80,6 @@ export class ProjectConfigService implements OnModuleInit {
       kolRadarMinViews: normalizePositiveNumber(
         kolRadarMinViewsConfig?.value,
         defaults.kolRadarMinViews,
-      ),
-      kolRadarAccounts: normalizeKolAccounts(
-        kolAccountsConfig?.value,
-        defaults.kolRadarAccounts,
       ),
     };
   }
@@ -175,18 +164,6 @@ export class ProjectConfigService implements OnModuleInit {
       });
     }
 
-    if (patch.kolRadarAccounts) {
-      await this.repository.upsert({
-        key: 'x.trends.kolAccounts',
-        value: normalizeKolAccounts(
-          patch.kolRadarAccounts,
-          DEFAULT_X_TREND_COLLECTION_CONFIG.kolRadarAccounts,
-        ),
-        description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolAccounts'],
-        updatedBy,
-      });
-    }
-
     return this.getXTrendCollectionConfig();
   }
 
@@ -205,21 +182,6 @@ export class ProjectConfigService implements OnModuleInit {
       key,
       value,
       description: PROJECT_CONFIG_DESCRIPTIONS[key],
-      updatedBy: 'system',
-    });
-  }
-
-  private async backfillKolAccounts(defaultAccounts: KolRadarAccountConfig[]) {
-    const existing = await this.repository.findByKey('x.trends.kolAccounts');
-    if (!existing) return;
-
-    const merged = mergeKolAccounts(existing.value, defaultAccounts);
-    if (!merged) return;
-
-    await this.repository.upsert({
-      key: 'x.trends.kolAccounts',
-      value: merged,
-      description: PROJECT_CONFIG_DESCRIPTIONS['x.trends.kolAccounts'],
       updatedBy: 'system',
     });
   }
@@ -262,90 +224,4 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   }
 
   return fallback;
-}
-
-function normalizeKolAccounts(
-  value: unknown,
-  fallback: KolRadarAccountConfig[],
-): KolRadarAccountConfig[] {
-  if (!Array.isArray(value)) {
-    return fallback;
-  }
-
-  const fallbackByHandle = new Map(
-    fallback.map((item) => [normalizeHandle(item.handle), item]),
-  );
-  const seen = new Set<string>();
-  const accounts: KolRadarAccountConfig[] = [];
-
-  for (const item of value) {
-    if (!isPlainObject(item)) continue;
-    const handle = normalizeHandle(item.handle);
-    if (!handle || seen.has(handle)) continue;
-
-    const fallbackItem = fallbackByHandle.get(handle);
-    const joinedAt = normalizeDateString(item.joinedAt, fallbackItem?.joinedAt);
-    if (!joinedAt) continue;
-
-    accounts.push({
-      handle,
-      groupTag: normalizeOptionalString(item.groupTag),
-      joinedAt,
-      enabled: normalizeBoolean(
-        item.enabled,
-        fallbackItem?.enabled ?? true,
-      ),
-    });
-    seen.add(handle);
-  }
-
-  return accounts.length > 0 ? accounts : fallback;
-}
-
-function mergeKolAccounts(
-  value: unknown,
-  fallback: KolRadarAccountConfig[],
-): KolRadarAccountConfig[] | null {
-  if (!Array.isArray(value)) {
-    return fallback;
-  }
-
-  const normalizedExisting = normalizeKolAccounts(value, fallback);
-  const existingByHandle = new Map(
-    normalizedExisting.map((item) => [normalizeHandle(item.handle), item]),
-  );
-  const merged: KolRadarAccountConfig[] = [...normalizedExisting];
-
-  for (const item of fallback) {
-    const handle = normalizeHandle(item.handle);
-    if (!handle || existingByHandle.has(handle)) continue;
-    merged.push(item);
-  }
-
-  return merged.length === normalizedExisting.length ? null : merged;
-}
-
-function normalizeHandle(value: unknown): string {
-  return typeof value === 'string' ? value.trim().replace(/^@/, '') : '';
-}
-
-function normalizeOptionalString(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const next = value.trim();
-  return next ? next : null;
-}
-
-function normalizeDateString(value: unknown, fallback?: string): string | null {
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
-    }
-  }
-
-  return fallback ?? null;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

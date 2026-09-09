@@ -279,6 +279,7 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
           authorHandles: [handle],
           authorHandle: handle,
           authorName: getString(item.authorName) ?? null,
+          authorId: getString(item.authorId) ?? null,
           postType: item.postType,
           publishedAt: item.publishedAt,
           url: getString(item.url) ?? null,
@@ -300,6 +301,7 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
             postId: item.postId,
             authorHandle: handle,
             authorName: getString(item.authorName) ?? null,
+            authorId: getString(item.authorId) ?? null,
             postType: item.postType,
             publishedAt: item.publishedAt,
           },
@@ -354,7 +356,12 @@ export class XAccountPostsPlugin implements DataSourcePlugin {
           continue;
         }
 
-        const post = mapTimelineTweet(tweet, input.handle, input.observedAt);
+        const post = mapTimelineTweet(tweet, {
+          fallbackHandle: input.handle,
+          fallbackAuthorId: user.id,
+          fallbackAuthorName: user.name ?? null,
+          observedAt: input.observedAt,
+        });
         if (!input.includeReposts && post.postType === 'repost') continue;
         if (!input.includeQuotes && post.postType === 'quote') continue;
         if (!post.text.trim()) continue;
@@ -448,17 +455,21 @@ function extractTweets(body: TwitterApiIoTimelineResponse) {
 
 function mapTimelineTweet(
   tweet: TwitterApiIoTimelineTweet,
-  fallbackHandle: string,
-  observedAt: Date,
+  context: {
+    fallbackHandle: string;
+    fallbackAuthorId: string | null;
+    fallbackAuthorName: string | null;
+    observedAt: Date;
+  },
 ): XAccountPostPayload {
-  const authorHandle = tweet.author?.userName ?? fallbackHandle;
-  const postId = tweet.id ?? `missing-${fallbackHandle}-${tweet.createdAt ?? observedAt.toISOString()}`;
+  const authorHandle = tweet.author?.userName ?? context.fallbackHandle;
+  const postId = tweet.id ?? `missing-${context.fallbackHandle}-${tweet.createdAt ?? context.observedAt.toISOString()}`;
 
   return {
     postId,
     authorHandle,
-    authorId: tweet.author?.id ?? null,
-    authorName: tweet.author?.name ?? null,
+    authorId: tweet.author?.id ?? context.fallbackAuthorId,
+    authorName: tweet.author?.name ?? context.fallbackAuthorName,
     text: tweet.text ?? '',
     url: tweet.url ?? null,
     postType: resolvePostType(tweet),
@@ -469,7 +480,7 @@ function mapTimelineTweet(
     quotedPostId: tweet.quoted_tweet
       ? String((tweet.quoted_tweet as { id?: unknown }).id ?? '') || null
       : null,
-    publishedAt: tweet.createdAt ?? observedAt.toISOString(),
+    publishedAt: tweet.createdAt ?? context.observedAt.toISOString(),
     metrics: {
       views: tweet.viewCount ?? null,
       likes: tweet.likeCount ?? null,
